@@ -454,6 +454,21 @@ node scripts/cron-whatsapp-notifier.js --backup=rinnovami-backup.json --phone=+$
                       className="px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
                     />
                   </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>{lang === 'ar' ? 'سيرسل تلقائياً إلى الأرقام الثلاثة (3331785636, 3802633225, 3298993363)' : 'Invio automatico a tutti e 3 i numeri'}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSendAlert(true)}
+                      disabled={isSending || !settings.apiToken}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-all shadow-xs"
+                    >
+                      {isSending ? (lang === 'ar' ? 'جارٍ الإرسال...' : 'Invio...') : (lang === 'ar' ? 'إرسال تجربة واتساب ⚡' : 'Test WhatsApp ⚡')}
+                    </button>
+                  </div>
                 </div>
               )}
 

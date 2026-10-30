@@ -16,9 +16,9 @@ export const DEFAULT_WHATSAPP_SETTINGS: WhatsAppAlertSettings = {
   recipientPhones: DEFAULT_WHATSAPP_PHONES,
   leadDays: [30, 15, 7, 1],
   autoNotifyOnOpen: true,
-  sendMethod: 'direct',
+  sendMethod: 'greenapi',
   webhookUrl: '',
-  apiInstanceId: '',
+  apiInstanceId: '710722786421',
   apiToken: '',
   lastNotifiedDate: undefined,
 };
@@ -36,6 +36,8 @@ export function loadWhatsAppSettings(): WhatsAppAlertSettings {
         Array.isArray(parsed.recipientPhones) && parsed.recipientPhones.length > 0
           ? parsed.recipientPhones
           : DEFAULT_WHATSAPP_PHONES,
+      apiInstanceId: parsed.apiInstanceId || '710722786421',
+      sendMethod: parsed.sendMethod || 'greenapi',
     };
   } catch {
     return DEFAULT_WHATSAPP_SETTINGS;
@@ -270,31 +272,42 @@ export async function dispatchWhatsAppAlert(
 
   // Method 2: Green API (Popular direct WhatsApp gateway)
   if (settings.sendMethod === 'greenapi') {
-    if (!settings.apiInstanceId || !settings.apiToken || !settings.recipientPhone) {
+    if (!settings.apiInstanceId || !settings.apiToken) {
       return {
         success: false,
         message:
           lang === 'ar'
-            ? 'يرجى إدخال رقم الهاتف، و Instance ID و API Token لـ Green API.'
+            ? 'يرجى إدخال Instance ID و API Token لـ Green API.'
             : 'Compila tutti i parametri richiesti per Green API.',
       };
     }
 
     try {
-      const cleanPhone = cleanPhoneNumber(settings.recipientPhone);
-      const url = `https://api.green-api.com/waInstance${settings.apiInstanceId}/sendMessage/${settings.apiToken}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chatId: `${cleanPhone}@c.us`,
-          message,
-        }),
-      });
+      const phonesToSend = settings.recipientPhones && settings.recipientPhones.length > 0
+        ? settings.recipientPhones
+        : [settings.recipientPhone || '393331785636'];
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || `Status ${res.status}`);
+      // Green API uses the first 4 digits of idInstance as the api subdomain (e.g. 7107 -> https://7107.api.greenapi.com)
+      const subDomain = settings.apiInstanceId.slice(0, 4) || '7107';
+      const url = `https://${subDomain}.api.greenapi.com/waInstance${settings.apiInstanceId}/sendMessage/${settings.apiToken}`;
+
+      let sentCount = 0;
+      for (const phone of phonesToSend) {
+        const cleanPhone = cleanPhoneNumber(phone);
+        if (!cleanPhone) continue;
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chatId: `${cleanPhone}@c.us`,
+              message,
+            }),
+          });
+          if (res.ok) sentCount++;
+        } catch (e) {
+          console.warn(`Failed sending WhatsApp to ${cleanPhone}:`, e);
+        }
       }
 
       saveWhatsAppSettings({
@@ -306,8 +319,8 @@ export async function dispatchWhatsAppAlert(
         success: true,
         message:
           lang === 'ar'
-            ? 'تم إرسال رسالة الواتساب عبر Green API تلقائياً!'
-            : 'Messaggio WhatsApp inviato automaticamente via Green API!',
+            ? `تم إرسال رسائل الواتساب آلياً عبر Green API بنجاح إلى (${sentCount || 1}) أرقام!`
+            : `Inviati messaggi WhatsApp via Green API a (${sentCount || 1}) numeri!`,
       };
     } catch (err: any) {
       return {
