@@ -332,26 +332,61 @@ node scripts/cron-email-notifier.js --backup=rinnovami-backup.json --to=${settin
 
               {settings.sendMethod === 'webhook' && (
                 <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
-                  <h4 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                    <ExternalLink className="w-4 h-4 text-brand-500" />
-                    <span>{lang === 'ar' ? 'إعداد رابط Webhook' : 'Configurazione Webhook'}</span>
-                  </h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                      <ExternalLink className="w-4 h-4 text-brand-500" />
+                      <span>{lang === 'ar' ? 'رابط Zapier Webhook التلقائي' : 'Endpoint Zapier Webhook'}</span>
+                    </h4>
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                      {lang === 'ar' ? 'متصل وجاهز' : 'Pronto'}
+                    </span>
+                  </div>
+
                   <p className="text-xs text-slate-500">
                     {lang === 'ar'
-                      ? 'ضع رابط Webhook من Make.com أو Zapier أو n8n أو سيرفرك الخاص. سيتم إرسال بيانات الوثائق المنتهية بصيغة JSON تلقائياً.'
-                      : 'Inserisci l\'endpoint Webhook (Make, Zapier, n8n). Verrà inviato un payload JSON con i documenti in scadenza.'}
+                      ? 'تم ربط رابط Zapier المخصص لإرسال التنبيهات إلى Greenimpianti225@gmail.com. يمكنك إرسال تجربة فورية لفحص الخطوات في Zapier.'
+                      : 'Collegato all\'endpoint Zapier per notifiche email. Invia un payload di prova per testare il trigger Zapier.'}
                   </p>
-                  <input
-                    type="url"
-                    value={settings.webhookUrl || ''}
-                    onChange={(e) => {
-                      const updated = { ...settings, webhookUrl: e.target.value };
-                      setSettings(updated);
-                      saveEmailSettings(updated);
-                    }}
-                    placeholder="https://hook.eu1.make.com/xxxxxxxxx"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-mono"
-                  />
+
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={settings.webhookUrl || ''}
+                      onChange={(e) => {
+                        const updated = { ...settings, webhookUrl: e.target.value };
+                        setSettings(updated);
+                        saveEmailSettings(updated);
+                      }}
+                      placeholder="https://hooks.zapier.com/hooks/catch/..."
+                      className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-mono text-slate-700 dark:text-slate-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSendReport(true)}
+                      disabled={isSending}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 shrink-0 transition-colors shadow-sm"
+                    >
+                      {isSending ? (lang === 'ar' ? 'جارٍ الإرسال...' : 'Invio...') : (lang === 'ar' ? 'إرسال اختبار لـ Zapier' : 'Test Zapier')}
+                    </button>
+                  </div>
+
+                  {/* Zapier Field Mapping Guide */}
+                  <div className="mt-3 p-3 bg-white dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-700/80 text-[11px] space-y-1.5">
+                    <div className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <span>{lang === 'ar' ? 'أسماء الحقول المتاحة في Zapier (Mapping):' : 'Campi disponibili su Zapier:'}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-slate-600 dark:text-slate-400 font-mono">
+                      <div><strong className="text-brand-600">daysRemaining</strong>: متبقي (رقم - لفلتر &le; 3)</div>
+                      <div><strong className="text-brand-600">expiryDate</strong>: تاريخ الانتهاء (YYYY-MM-DD)</div>
+                      <div><strong className="text-brand-600">title</strong>: اسم الورقة (Permesso...)</div>
+                      <div><strong className="text-brand-600">documentTitle</strong>: اسم الوثيقة</div>
+                      <div><strong className="text-brand-600">recipient</strong>: البريد المستهدف</div>
+                      <div><strong className="text-brand-600">subject</strong>: عنوان البريد الجاهز</div>
+                      <div><strong className="text-brand-600">message</strong>: نص التذكير الكامل</div>
+                      <div><strong className="text-brand-600">holderName</strong>: صاحب الوثيقة</div>
+                    </div>
+                  </div>
                 </div>
               )}
 

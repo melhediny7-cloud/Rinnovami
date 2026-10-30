@@ -7,10 +7,10 @@ const EMAIL_SETTINGS_STORAGE_KEY = 'rinnovami_email_alert_settings_v1';
 export const DEFAULT_EMAIL_SETTINGS: EmailAlertSettings = {
   enabled: true,
   recipientEmail: 'Greenimpianti225@gmail.com',
-  leadDays: [30, 15, 7, 1],
+  leadDays: [30, 15, 7, 3, 1],
   autoNotifyOnOpen: true,
-  sendMethod: 'mailto',
-  webhookUrl: '',
+  sendMethod: 'webhook',
+  webhookUrl: 'https://hooks.zapier.com/hooks/catch/29297098/49i2beh/',
   emailJsServiceId: '',
   emailJsTemplateId: '',
   emailJsPublicKey: '',
@@ -26,6 +26,8 @@ export function loadEmailSettings(): EmailAlertSettings {
       ...DEFAULT_EMAIL_SETTINGS,
       ...parsed,
       recipientEmail: parsed.recipientEmail || 'Greenimpianti225@gmail.com',
+      webhookUrl: parsed.webhookUrl || 'https://hooks.zapier.com/hooks/catch/29297098/49i2beh/',
+      sendMethod: parsed.sendMethod || 'webhook',
     };
   } catch {
     return DEFAULT_EMAIL_SETTINGS;
@@ -262,24 +264,57 @@ export async function dispatchEmailAlert(
     }
 
     try {
+      const { allUrgent } = getExpiringDocumentsForAlert(documents, settings.leadDays);
+      const sampleDoc = allUrgent[0] || documents[0] || {
+        id: 'sample-doc-1',
+        title: 'Permesso di Soggiorno',
+        expiryDate: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+        holderName: 'Mohamed Elhediny',
+        documentNumber: 'IT98765432',
+        category: 'permesso_soggiorno',
+        issuingAuthority: 'Questura di Milano',
+      };
+
+      const daysRemaining = sampleDoc.expiryDate ? getDaysRemaining(sampleDoc.expiryDate) : 3;
+
       const response = await fetch(settings.webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          recipient: settings.recipientEmail,
+          // Primary fields for Zapier Filter & Gmail Action:
+          title: sampleDoc.title,
+          documentTitle: sampleDoc.title,
+          documentName: sampleDoc.title,
+          expiryDate: sampleDoc.expiryDate,
+          daysRemaining: daysRemaining,
+          holderName: sampleDoc.holderName || '',
+          documentNumber: sampleDoc.documentNumber || '',
+          category: sampleDoc.category || '',
+          issuingAuthority: sampleDoc.issuingAuthority || '',
+          status: computeDocumentStatus(sampleDoc.expiryDate),
+
+          // Email fields:
+          recipient: settings.recipientEmail || 'Greenimpianti225@gmail.com',
+          to: settings.recipientEmail || 'Greenimpianti225@gmail.com',
+          from: 'melhediny7@gmail.com',
           subject: report.subject,
           text: report.plainText,
+          message: report.plainText,
           html: report.htmlText,
           urgentCount: report.urgentCount,
-          documents: documents.map((d) => ({
+
+          // Full documents list:
+          documents: (allUrgent.length > 0 ? allUrgent : documents).map((d) => ({
             id: d.id,
             title: d.title,
             expiryDate: d.expiryDate,
             daysRemaining: getDaysRemaining(d.expiryDate),
             holderName: d.holderName,
             documentNumber: d.documentNumber,
+            category: d.category,
           })),
           timestamp: new Date().toISOString(),
+          isTest,
         }),
       });
 
@@ -297,8 +332,8 @@ export async function dispatchEmailAlert(
         success: true,
         message:
           lang === 'ar'
-            ? 'تم إرسال التنبيه عبر الـ Webhook بنجاح!'
-            : 'Avviso inviato con successo tramite Webhook!',
+            ? 'تم إرسال التنبيه عبر الـ Webhook (Zapier) بنجاح!'
+            : 'Avviso inviato con successo tramite Webhook (Zapier)!',
       };
     } catch (err: any) {
       return {
