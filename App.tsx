@@ -40,6 +40,8 @@ import { autoProcessFile, AutoScanProgressItem } from './utils/autoScanProcessor
 import { ExpiryCalendarViewModal } from './components/ExpiryCalendarViewModal';
 import { AuditLogModal } from './components/AuditLogModal';
 import { AppLockModal } from './components/AppLockModal';
+import { CloudSyncModal } from './components/CloudSyncModal';
+import { loadCloudSyncSettings, syncVaultToCloud } from './utils/cloudSyncService';
 import { AppLockScreen } from './components/AppLockScreen';
 import { isCurrentlyLocked, lockAppImmediately, loadLockSettings } from './utils/appLockService';
 import { logActivity } from './utils/auditLogger';
@@ -87,6 +89,7 @@ export const App: React.FC = () => {
   const [isCalendarViewOpen, setIsCalendarViewOpen] = useState(false);
   const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
   const [isLockSettingsOpen, setIsLockSettingsOpen] = useState(false);
+  const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
   const [isLocked, setIsLocked] = useState<boolean>(() => isCurrentlyLocked());
   const [lockSettingsVersion, setLockSettingsVersion] = useState(0);
 
@@ -150,6 +153,19 @@ export const App: React.FC = () => {
       localStorage.setItem('rinnovami_theme', 'light');
     }
   }, [darkMode]);
+
+  // Auto-sync encrypted vault to cloud when modified (if enabled)
+  useEffect(() => {
+    if (!isLoadingDocs && documents.length > 0) {
+      const syncSettings = loadCloudSyncSettings();
+      if (syncSettings.isEnabled && syncSettings.autoSync && syncSettings.vaultPassword) {
+        const timer = setTimeout(() => {
+          syncVaultToCloud(documents, syncSettings.vaultPassword!).catch(() => {});
+        }, 3500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [documents, isLoadingDocs]);
 
   // Persist documents to IndexedDB whenever modified
   useEffect(() => {
@@ -503,6 +519,7 @@ export const App: React.FC = () => {
           onOpenCalendarView={() => setIsCalendarViewOpen(true)}
           onOpenAuditLog={() => setIsAuditLogOpen(true)}
           onOpenAppLock={() => setIsLockSettingsOpen(true)}
+          onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
           onLockNow={() => {
             lockAppImmediately();
             setIsLocked(true);
@@ -741,6 +758,18 @@ export const App: React.FC = () => {
         isOpen={isAuditLogOpen}
         onClose={() => setIsAuditLogOpen(false)}
         lang={lang}
+      />
+
+      <CloudSyncModal
+        isOpen={isCloudSyncModalOpen}
+        onClose={() => setIsCloudSyncModalOpen(false)}
+        lang={lang}
+        documents={documents}
+        onDocumentsRestored={(restoredDocs) => {
+          setDocuments(restoredDocs);
+          saveDocuments(restoredDocs);
+        }}
+        showToast={showToast}
       />
 
       <AppLockModal

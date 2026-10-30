@@ -14,7 +14,8 @@ import {
   loadLockSettings, 
   saveLockSettings, 
   isBiometricsAvailable, 
-  authenticateWithBiometrics 
+  registerBiometricCredential,
+  authenticateWithBiometrics
 } from '../utils/appLockService';
 import { translations } from '../translations';
 
@@ -94,6 +95,33 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
     setTimeout(() => {
       onClose();
     }, 1000);
+  };
+
+  const handleToggleBiometrics = async (checked: boolean) => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    if (!checked) {
+      setSettings((prev) => ({ ...prev, useBiometrics: false }));
+      return;
+    }
+
+    try {
+      const ok = await registerBiometricCredential();
+      if (ok) {
+        setSettings((prev) => ({ ...prev, useBiometrics: true }));
+        setSuccessMsg(lang === 'ar' ? 'تم تسجيل وتفعيل بصمة الوجه / الإصبع بنجاح!' : 'Biometria registrata con successo!');
+      } else {
+        const testOk = await authenticateWithBiometrics();
+        if (testOk) {
+          setSettings((prev) => ({ ...prev, useBiometrics: true }));
+          setSuccessMsg(lang === 'ar' ? 'تم تفعيل التحقق البيومتري!' : 'Autenticazione biometrica attivata!');
+        } else {
+          setErrorMsg(lang === 'ar' ? 'تعذر تفعيل البصمة. تأكد من تفعيل البصمة أو Face ID في جهازك.' : 'Impossibile attivare la biometria. Verifica le impostazioni del dispositivo.');
+        }
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'خطأ في تفعيل البصمة');
+    }
   };
 
   const handleTestBiometrics = async () => {
@@ -238,7 +266,7 @@ export const AppLockModal: React.FC<AppLockModalProps> = ({
                   <input
                     type="checkbox"
                     checked={settings.useBiometrics}
-                    onChange={(e) => setSettings({ ...settings, useBiometrics: e.target.checked })}
+                    onChange={(e) => handleToggleBiometrics(e.target.checked)}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>

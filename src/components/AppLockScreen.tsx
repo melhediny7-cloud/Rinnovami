@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lock, Unlock, Fingerprint, Delete, ShieldAlert } from 'lucide-react';
 import { Language } from '../types';
 import { 
@@ -18,6 +18,17 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({ lang, onUnlocked }
   const [errorShake, setErrorShake] = useState(false);
   const [isBiometricChecking, setIsBiometricChecking] = useState(false);
   const settings = loadLockSettings();
+
+  // Auto-trigger native Face ID / Fingerprint on screen appear
+  useEffect(() => {
+    if (settings.useBiometrics) {
+      const timer = setTimeout(() => {
+        handleBiometricAuth();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [settings.useBiometrics]);
+
 
   const handleKeyPress = (digit: string) => {
     if (pin.length >= 8) return;

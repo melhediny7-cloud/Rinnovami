@@ -1,6 +1,7 @@
 import React from 'react';
 import { 
   FileCheck2, 
+  Cloud, 
   Languages, 
   Moon, 
   Sun, 
@@ -31,6 +32,7 @@ interface NavbarProps {
   onOpenCalendarView: () => void;
   onOpenAuditLog: () => void;
   onOpenAppLock: () => void;
+  onOpenCloudSync: () => void;
   onLockNow: () => void;
   isLockEnabled: boolean;
   onOpenEmailAlerts: () => void;
@@ -53,6 +55,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenCalendarView,
   onOpenAuditLog,
   onOpenAppLock,
+  onOpenCloudSync,
   onLockNow,
   isLockEnabled,
   onOpenEmailAlerts,
@@ -150,6 +153,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span className="hidden xl:inline">{lang === 'ar' ? 'السجل' : 'Audit'}</span>
+            </button>
+
+            {/* Zero-Knowledge Cloud Sync Button */}
+            <button
+              onClick={onOpenCloudSync}
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold text-sky-700 dark:text-sky-300 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900/60 border border-sky-200 dark:border-sky-800 transition-colors shadow-xs"
+              title={lang === 'ar' ? 'السحابة المشفرة والمزامنة بين الأجهزة' : 'Cloud Sync Crittografato'}
+            >
+              <Cloud className="w-4 h-4 text-sky-500" />
+              <span className="hidden xl:inline">{lang === 'ar' ? 'السحابة' : 'Cloud'}</span>
             </button>
 
             {/* App Lock Settings & Lock Now */}
