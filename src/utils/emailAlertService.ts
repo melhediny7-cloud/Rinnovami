@@ -252,17 +252,6 @@ export async function dispatchEmailAlert(
 
   const report = formatEmailReport(documents, lang, settings.recipientEmail, isTest);
 
-  // If there are no urgent documents and this is not a test, inform user
-  if (report.urgentCount === 0 && !isTest) {
-    return {
-      success: true,
-      message:
-        lang === 'ar'
-          ? 'رائع! لا توجد أي وثائق منتهية أو قاربت على الانتهاء حالياً.'
-          : 'Ottimo! Nessun documento in scadenza o scaduto al momento.',
-    };
-  }
-
   // Method 1: Webhook API (Zapier, Make, n8n, Resend, or custom backend)
   if (settings.sendMethod === 'webhook') {
     if (!settings.webhookUrl) {

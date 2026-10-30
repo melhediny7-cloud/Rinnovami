@@ -96,19 +96,38 @@ export const WhatsAppAlertsModal: React.FC<WhatsAppAlertsModalProps> = ({
       : ['+393331785636', '+393802633225', '+393298993363'];
 
     try {
-      for (const p of phones) {
-        const customSettings = { ...settings, recipientPhone: p };
-        await dispatchWhatsAppAlert(customSettings, documents, lang, isTest);
+      // 1. Copy the full formatted message to clipboard so the user has it ready
+      const { message } = formatAllDocsWhatsAppMessage(documents, lang, settings.leadDays, isTest);
+      try {
+        await navigator.clipboard.writeText(message);
+      } catch (clipErr) {
+        console.warn('Clipboard write warning:', clipErr);
       }
+
+      // 2. Open the first phone directly (browsers allow 1 popup per user click)
+      const primaryPhone = phones[0];
+      const customSettings = { ...settings, recipientPhone: primaryPhone };
+      await dispatchWhatsAppAlert(customSettings, documents, lang, isTest);
+
       onToast(
         lang === 'ar'
-          ? 'تم فتح تقارير الواتساب للأرقام الثلاثة المعتمدة بنجاح!'
-          : 'Aperte le chat WhatsApp per tutti i 3 numeri registrati!'
+          ? 'تم فتح واتساب للرقم الأول ونسخ نص التقرير! اضغط على الرقم الثاني والثالث لفتحهما.'
+          : 'Aperto WhatsApp per il primo numero e copiato il testo! Clicca sui numeri successivi.'
       );
     } catch (err: any) {
       onToast(err.message || 'حدث خطأ أثناء الإرسال');
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const copyReportText = async () => {
+    const { message } = formatAllDocsWhatsAppMessage(documents, lang, settings.leadDays, false);
+    try {
+      await navigator.clipboard.writeText(message);
+      onToast(lang === 'ar' ? 'تم نسخ نص تقرير الواتساب إلى الحافظة بنجاح!' : 'Testo del report copiato negli appunti!');
+    } catch (err) {
+      onToast(lang === 'ar' ? 'تعذر النسخ' : 'Errore copia');
     }
   };
 
@@ -352,6 +371,16 @@ node scripts/cron-whatsapp-notifier.js --backup=rinnovami-backup.json --phone=+$
                     className="px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                   >
                     {lang === 'ar' ? 'رسالة تجريبية' : 'Test'}
+                  </button>
+
+                  <button
+                    onClick={copyReportText}
+                    type="button"
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                    title={lang === 'ar' ? 'نسخ نص الرسالة بالكامل' : 'Copia testo completo'}
+                  >
+                    <Copy className="w-4 h-4 text-emerald-600" />
+                    <span>{lang === 'ar' ? 'نسخ التقرير' : 'Copia'}</span>
                   </button>
                 </div>
               </div>

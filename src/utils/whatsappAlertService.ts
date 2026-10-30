@@ -220,16 +220,6 @@ export async function dispatchWhatsAppAlert(
     isTest
   );
 
-  if (urgentCount === 0 && !isTest) {
-    return {
-      success: true,
-      message:
-        lang === 'ar'
-          ? 'رائع! لا توجد وثائق قاربت على الانتهاء حالياً.'
-          : 'Ottimo! Nessun documento in scadenza al momento.',
-    };
-  }
-
   // Method 1: Webhook API (Zapier, Make, n8n, etc.)
   if (settings.sendMethod === 'webhook') {
     if (!settings.webhookUrl) {
