@@ -15,85 +15,19 @@ const META_BACKUP_KEY = 'rinnovami_docs_meta_v2';
 const LEGACY_STORAGE_KEY_V1 = 'docuscadenza_documents_v1';
 const LEGACY_FALLBACK_KEY_V1 = 'rinnovami_documents_fallback';
 
-export const DEFAULT_DEMO_DOCUMENTS: DocumentItem[] = [
-  {
-    id: 'demo-doc-1',
-    title: 'تصريح الإقامة - Permesso di Soggiorno',
-    category: 'permesso_soggiorno',
-    documentNumber: 'I098234567X',
-    holderName: 'أحمد محمود / Ahmed Mahmoud',
-    issueDate: getTodayOffset(-720),
-    expiryDate: getTodayOffset(12), // Critical: 12 days left
-    issuingAuthority: 'Questura di Milano',
-    reminderDaysBefore: 60,
-    notes: 'تم استلام المظروف الأصفر (Kit). يجب التقديم قبل انتهاء الصلاحية.',
-    isDemo: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'demo-doc-2',
-    title: 'تأمين السيارة - Assicurazione Auto RCA',
-    category: 'assicurazione',
-    documentNumber: 'POL-2024-88912',
-    holderName: 'أحمد محمود / Ahmed Mahmoud',
-    issueDate: getTodayOffset(-375),
-    expiryDate: getTodayOffset(-5), // Expired 5 days ago
-    issuingAuthority: 'Allianz Assicurazioni',
-    reminderDaysBefore: 30,
-    notes: 'فترة السماح (Tolleranza 15 giorni) تنتهي قريباً جداً!',
-    isDemo: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'demo-doc-3',
-    title: 'بطاقة الهوية الإلكترونية - Carta d\'Identità',
-    category: 'carta_identita',
-    documentNumber: 'CA45678YY',
-    holderName: 'أحمد محمود / Ahmed Mahmoud',
-    issueDate: getTodayOffset(-365 * 9),
-    expiryDate: getTodayOffset(45), // Expiring soon: 45 days left
-    issuingAuthority: 'Comune di Roma',
-    reminderDaysBefore: 90,
-    notes: 'تم حجز موعد التجديد على موقع prenotazionicie.interno.gov.it',
-    isDemo: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'demo-doc-4',
-    title: 'رخصة القيادة - Patente di Guida B',
-    category: 'patente',
-    documentNumber: 'U19876543Z',
-    holderName: 'أحمد محمود / Ahmed Mahmoud',
-    issueDate: getTodayOffset(-365 * 2),
-    expiryDate: getTodayOffset(365 * 8), // Valid
-    issuingAuthority: 'UCO Ministero Trasporti',
-    reminderDaysBefore: 60,
-    notes: 'سارية الصلاحية',
-    isDemo: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'demo-doc-5',
-    title: 'البطاقة الصحية - Tessera Sanitaria (TEAM)',
-    category: 'tessera_sanitaria',
-    documentNumber: '8038000123456789012',
-    holderName: 'أحمد محمود / Ahmed Mahmoud',
-    issueDate: getTodayOffset(-365 * 4),
-    expiryDate: getTodayOffset(220), // Valid
-    issuingAuthority: 'Agenzia delle Entrate / ASL',
-    reminderDaysBefore: 60,
-    notes: 'صالحة في جميع دول الاتحاد الأوروبي',
-    isDemo: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
+export const DEFAULT_DEMO_DOCUMENTS: DocumentItem[] = [];
 
 let dbInstance: IDBDatabase | null = null;
+
+/**
+ * Helper to identify demo or sample documents
+ */
+export function isDemoDoc(doc: DocumentItem | any): boolean {
+  if (!doc) return false;
+  if (doc.isDemo === true) return true;
+  if (typeof doc.id === 'string' && (doc.id.startsWith('demo-doc-') || doc.id.includes('demo'))) return true;
+  return false;
+}
 
 /**
  * Open or retrieve the cached IndexedDB instance
@@ -138,32 +72,28 @@ function openDB(): Promise<IDBDatabase> {
 }
 
 /**
- * Check if there are legacy documents in localStorage that need migration
+ * Clean legacy storage keys
  */
-function checkLegacyDocs(): DocumentItem[] | null {
+function cleanLegacyStorage(): void {
   try {
-    const raw = localStorage.getItem(LEGACY_STORAGE_KEY_V1) || localStorage.getItem(LEGACY_FALLBACK_KEY_V1);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
-    }
-  } catch (e) {
-    console.warn('Error reading legacy localStorage:', e);
-  }
-  return null;
+    localStorage.removeItem(LEGACY_STORAGE_KEY_V1);
+    localStorage.removeItem(LEGACY_FALLBACK_KEY_V1);
+    localStorage.setItem(SEEDED_FLAG_KEY, 'true');
+  } catch {}
 }
 
 /**
  * Load all documents from IndexedDB.
- * Uses SEEDED_FLAG_KEY to ensure demo data is only seeded ONCE on first run,
- * and never re-seeded if user deletes documents!
+ * Completely filters out and purges any demo documents so only user-created documents exist.
+ * Never restores or re-seeds demo documents.
  */
 export async function loadDocuments(): Promise<DocumentItem[]> {
+  cleanLegacyStorage();
+
   try {
     const db = await openDB();
 
-    const docs = await new Promise<DocumentItem[]>((resolve, reject) => {
+    const rawDocs = await new Promise<DocumentItem[]>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
       const req = store.getAll();
@@ -172,55 +102,37 @@ export async function loadDocuments(): Promise<DocumentItem[]> {
       req.onerror = () => reject(req.error);
     });
 
-    const hasSeeded = localStorage.getItem(SEEDED_FLAG_KEY);
+    // Strictly keep only non-demo user documents
+    const realDocs = (rawDocs || []).filter((d) => !isDemoDoc(d));
 
-    // If user has visited before: ALWAYS return what is in the database!
-    // Even if it has 0 documents (because user deleted them all), do NOT re-seed demo data!
-    if (hasSeeded === 'true') {
-      return docs;
+    // If there were any demo documents saved previously in IndexedDB, purge them immediately
+    if (realDocs.length !== (rawDocs || []).length) {
+      await saveDocuments(realDocs);
     }
 
-    // First visit ever: check for legacy documents to migrate first
-    const legacy = checkLegacyDocs();
-    if (legacy && legacy.length > 0) {
-      await saveDocuments(legacy);
-      localStorage.setItem(SEEDED_FLAG_KEY, 'true');
-      // Clean up legacy key
-      localStorage.removeItem(LEGACY_STORAGE_KEY_V1);
-      return legacy;
-    }
-
-    // First run ever without legacy data: seed demo documents once
-    if (docs.length === 0) {
-      await saveDocuments(DEFAULT_DEMO_DOCUMENTS);
-      localStorage.setItem(SEEDED_FLAG_KEY, 'true');
-      return DEFAULT_DEMO_DOCUMENTS;
-    }
-
-    localStorage.setItem(SEEDED_FLAG_KEY, 'true');
-    return docs;
+    return realDocs;
   } catch (err) {
     console.error('IndexedDB loadDocuments failed, trying fallback:', err);
     // Fallback to metadata backup
     try {
       const raw = localStorage.getItem(META_BACKUP_KEY);
       if (raw) {
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((d: any) => !isDemoDoc(d));
+        }
       }
     } catch {}
 
-    const hasSeeded = localStorage.getItem(SEEDED_FLAG_KEY);
-    if (hasSeeded === 'true') {
-      return [];
-    }
-    return DEFAULT_DEMO_DOCUMENTS;
+    return [];
   }
 }
 
 /**
- * Persist all documents to IndexedDB immediately and safely
+ * Persist documents to IndexedDB immediately and safely (demo docs are always excluded)
  */
 export async function saveDocuments(docs: DocumentItem[]): Promise<void> {
+  const cleanDocs = (docs || []).filter((d) => !isDemoDoc(d));
   const db = await openDB();
 
   return new Promise<void>((resolve, reject) => {
@@ -230,7 +142,7 @@ export async function saveDocuments(docs: DocumentItem[]): Promise<void> {
     tx.oncomplete = () => {
       // Save lightweight metadata copy to localStorage for extra resilience
       try {
-        const metaOnly = docs.map(({ fileData, ...rest }) => rest);
+        const metaOnly = cleanDocs.map(({ fileData, ...rest }) => rest);
         localStorage.setItem(META_BACKUP_KEY, JSON.stringify(metaOnly));
       } catch (e) {
         // Ignore quota warning on metadata
@@ -250,7 +162,7 @@ export async function saveDocuments(docs: DocumentItem[]): Promise<void> {
 
     // Clear existing and write the entire collection
     store.clear();
-    for (const doc of docs) {
+    for (const doc of cleanDocs) {
       store.put(doc);
     }
   });

@@ -37,6 +37,13 @@ import { AutoDropzone } from './components/AutoDropzone';
 import { AutoScanModal } from './components/AutoScanModal';
 import { GlobalDropOverlay } from './components/GlobalDropOverlay';
 import { autoProcessFile, AutoScanProgressItem } from './utils/autoScanProcessor';
+import { ExpiryCalendarViewModal } from './components/ExpiryCalendarViewModal';
+import { AuditLogModal } from './components/AuditLogModal';
+import { AppLockModal } from './components/AppLockModal';
+import { AppLockScreen } from './components/AppLockScreen';
+import { isCurrentlyLocked, lockAppImmediately, loadLockSettings } from './utils/appLockService';
+import { logActivity } from './utils/auditLogger';
+import { checkAndDispatchAutonomousAlerts } from './utils/autonomousNotifier';
 
 export const App: React.FC = () => {
   // Localization & Theme with backwards compatibility migration
@@ -77,6 +84,28 @@ export const App: React.FC = () => {
   const [isEmailAlertsModalOpen, setIsEmailAlertsModalOpen] = useState(false);
   const [isWhatsAppAlertsModalOpen, setIsWhatsAppAlertsModalOpen] = useState(false);
   const [isWallpaperModalOpen, setIsWallpaperModalOpen] = useState(false);
+  const [isCalendarViewOpen, setIsCalendarViewOpen] = useState(false);
+  const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
+  const [isLockSettingsOpen, setIsLockSettingsOpen] = useState(false);
+  const [isLocked, setIsLocked] = useState<boolean>(() => isCurrentlyLocked());
+  const [lockSettingsVersion, setLockSettingsVersion] = useState(0);
+
+  const isLockEnabled = useMemo(() => {
+    return loadLockSettings().isEnabled;
+  }, [lockSettingsVersion]);
+
+  // Handle visibility change to re-lock if timeout elapsed
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (isCurrentlyLocked()) {
+          setIsLocked(true);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
   const [autoScanQueue, setAutoScanQueue] = useState<AutoScanProgressItem[]>([]);
   const [isAutoScanModalOpen, setIsAutoScanModalOpen] = useState(false);
   const [isAppBackgroundActive, setIsAppBackgroundActive] = useState<boolean>(() => {
@@ -130,6 +159,50 @@ export const App: React.FC = () => {
       });
     }
   }, [documents, isLoadingDocs]);
+
+  // Autonomous Monitoring Engine: automatically detects expiring documents on startup & sends alerts
+  useEffect(() => {
+    if (!isLoadingDocs && documents.length > 0) {
+      const timer = setTimeout(() => {
+        checkAndDispatchAutonomousAlerts(documents, lang, false).then((res) => {
+          if (res.triggered) {
+            showToast(res.message);
+            playAlertSound();
+          }
+        });
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoadingDocs, documents.length, lang]);
+
+  // Periodic autonomous check every 60 minutes while app is running
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (documents.length > 0) {
+        checkAndDispatchAutonomousAlerts(documents, lang, false).then((res) => {
+          if (res.triggered) {
+            showToast(res.message);
+          }
+        });
+      }
+    }, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [documents, lang]);
+
+  // Re-check automatically whenever user returns to the tab or unminimizes browser
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && documents.length > 0) {
+        checkAndDispatchAutonomousAlerts(documents, lang, false).then((res) => {
+          if (res.triggered) {
+            showToast(res.message);
+          }
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [documents, lang]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -226,10 +299,14 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteDocument = async (id: string) => {
+    const docToDelete = documents.find((d) => d.id === id);
     const updated = documents.filter((d) => d.id !== id);
     setDocuments(updated);
     try {
       await saveDocuments(updated);
+      if (docToDelete) {
+        logActivity('delete', docToDelete.title, `Eliminato: ${docToDelete.fileName || docToDelete.id}`);
+      }
       showToast(t.toast.docDeleted);
     } catch (err: any) {
       showToast(err.message || 'خطأ في حذف الوثيقة');
@@ -237,6 +314,7 @@ export const App: React.FC = () => {
   };
 
   const handleQuickRenew = async (docId: string, newExpiryDate: string) => {
+    const docToRenew = documents.find((d) => d.id === docId);
     const updated = documents.map((d) =>
       d.id === docId
         ? { ...d, expiryDate: newExpiryDate, isDemo: false, updatedAt: new Date().toISOString() }
@@ -245,6 +323,9 @@ export const App: React.FC = () => {
     setDocuments(updated);
     try {
       await saveDocuments(updated);
+      if (docToRenew) {
+        logActivity('renew', docToRenew.title, `Nuova scadenza: ${newExpiryDate}`);
+      }
       playAlertSound();
       showToast(t.toast.docRenewed);
     } catch (err: any) {
@@ -297,6 +378,9 @@ export const App: React.FC = () => {
     }
 
     if (newlyCreatedDocs.length > 0) {
+      for (const doc of newlyCreatedDocs) {
+        logActivity('upload', doc.title, `Scansione automatica completata: ${doc.fileName || doc.category}`, doc.id);
+      }
       const updated = [...newlyCreatedDocs, ...documents];
       setDocuments(updated);
       try {
@@ -416,6 +500,14 @@ export const App: React.FC = () => {
             setIsGuideOpen(true);
           }}
           onOpenCalendar={() => setIsCalendarOpen(true)}
+          onOpenCalendarView={() => setIsCalendarViewOpen(true)}
+          onOpenAuditLog={() => setIsAuditLogOpen(true)}
+          onOpenAppLock={() => setIsLockSettingsOpen(true)}
+          onLockNow={() => {
+            lockAppImmediately();
+            setIsLocked(true);
+          }}
+          isLockEnabled={isLockEnabled}
           onOpenEmailAlerts={() => setIsEmailAlertsModalOpen(true)}
           onOpenWhatsAppAlerts={() => setIsWhatsAppAlertsModalOpen(true)}
           onOpenNameSuggestions={() => {}}
@@ -490,6 +582,14 @@ export const App: React.FC = () => {
               documents={documents}
               lang={lang}
               onFilterUrgent={() => setSelectedStatus('critical')}
+              onForceAutoAlert={async () => {
+                showToast(lang === 'ar' ? 'جارٍ الفحص الذاتي وإرسال التنبيه التلقائي...' : 'Controllo smart e invio in corso...');
+                const res = await checkAndDispatchAutonomousAlerts(documents, lang, true);
+                showToast(res.message);
+                if (res.triggered) {
+                  playAlertSound();
+                }
+              }}
             />
           </div>
 
@@ -593,6 +693,7 @@ export const App: React.FC = () => {
         }}
         onSave={handleSaveDocument}
         documentToEdit={documentToEdit}
+        existingDocuments={documents}
         lang={lang}
       />
 
@@ -623,6 +724,33 @@ export const App: React.FC = () => {
         onClose={() => setIsCalendarOpen(false)}
         documents={documents}
         lang={lang}
+      />
+
+      <ExpiryCalendarViewModal
+        isOpen={isCalendarViewOpen}
+        onClose={() => setIsCalendarViewOpen(false)}
+        documents={documents}
+        lang={lang}
+        onSelectDoc={(d) => {
+          setIsCalendarViewOpen(false);
+          setPreviewDoc(d);
+        }}
+      />
+
+      <AuditLogModal
+        isOpen={isAuditLogOpen}
+        onClose={() => setIsAuditLogOpen(false)}
+        lang={lang}
+      />
+
+      <AppLockModal
+        isOpen={isLockSettingsOpen}
+        onClose={() => setIsLockSettingsOpen(false)}
+        lang={lang}
+        onSettingsSaved={() => {
+          setLockSettingsVersion((v) => v + 1);
+          showToast(lang === 'ar' ? 'تم تحديث إعدادات الأمان والقفل' : 'Impostazioni di sicurezza aggiornate');
+        }}
       />
 
       <WallpaperModal
@@ -662,6 +790,14 @@ export const App: React.FC = () => {
         items={autoScanQueue}
         lang={lang}
       />
+
+      {/* Lock Screen Security Overlay */}
+      {isLocked && (
+        <AppLockScreen
+          lang={lang}
+          onUnlocked={() => setIsLocked(false)}
+        />
+      )}
     </div>
   );
 };
