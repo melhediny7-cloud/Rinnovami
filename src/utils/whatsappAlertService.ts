@@ -14,7 +14,7 @@ export const DEFAULT_WHATSAPP_SETTINGS: WhatsAppAlertSettings = {
   enabled: true,
   recipientPhone: '+393331785636',
   recipientPhones: DEFAULT_WHATSAPP_PHONES,
-  leadDays: [30, 15, 7, 1],
+  leadDays: [90, 60, 30, 15, 7, 1],
   autoNotifyOnOpen: true,
   sendMethod: 'greenapi',
   webhookUrl: '',
@@ -112,10 +112,10 @@ export function formatSingleDocWhatsAppMessage(
 export function formatAllDocsWhatsAppMessage(
   documents: DocumentItem[],
   lang: Language = 'ar',
-  leadDays: number[] = [30, 15, 7, 1],
+  leadDays: number[] = [90, 60, 30, 15, 7, 1],
   isTest = false
 ): { message: string; urgentCount: number } {
-  const maxDays = Math.max(...leadDays, 30);
+  const maxDays = Math.max(...leadDays, 90);
   const todayStr = new Date().toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'it-IT', {
     weekday: 'long',
     year: 'numeric',

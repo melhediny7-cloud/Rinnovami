@@ -7,7 +7,7 @@ const EMAIL_SETTINGS_STORAGE_KEY = 'rinnovami_email_alert_settings_v1';
 export const DEFAULT_EMAIL_SETTINGS: EmailAlertSettings = {
   enabled: true,
   recipientEmail: 'Greenimpianti225@gmail.com',
-  leadDays: [30, 15, 7, 3, 1],
+  leadDays: [90, 60, 30, 15, 7, 3, 1],
   autoNotifyOnOpen: true,
   sendMethod: 'webhook',
   webhookUrl: 'https://hook.eu1.make.com/j469ypwvo8cpihjazbqq25htixq4yu4h',
@@ -47,14 +47,15 @@ export function saveEmailSettings(settings: EmailAlertSettings): void {
  */
 export function getExpiringDocumentsForAlert(
   documents: DocumentItem[],
-  leadDays: number[] = [30, 15, 7, 1]
+  leadDays: number[] = [90, 60, 30, 15, 7, 3, 1]
 ): {
   expired: DocumentItem[];
   critical: DocumentItem[];
   expiringSoon: DocumentItem[];
   allUrgent: DocumentItem[];
 } {
-  const maxDays = Math.max(...leadDays, 30);
+  // In Italy, documents like Permesso di Soggiorno or CIE require up to 90 days lead time
+  const maxDays = Math.max(...leadDays, 90);
   const expired: DocumentItem[] = [];
   const critical: DocumentItem[] = [];
   const expiringSoon: DocumentItem[] = [];
@@ -62,12 +63,13 @@ export function getExpiringDocumentsForAlert(
   for (const doc of documents) {
     const days = getDaysRemaining(doc.expiryDate);
     const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore);
+    const reminderThreshold = doc.reminderDaysBefore ? Math.max(doc.reminderDaysBefore, maxDays) : maxDays;
 
     if (status === 'expired') {
       expired.push(doc);
-    } else if (status === 'critical' || days <= 15) {
+    } else if (status === 'critical' || days <= 30) {
       critical.push(doc);
-    } else if (days <= maxDays) {
+    } else if (days <= reminderThreshold) {
       expiringSoon.push(doc);
     }
   }
