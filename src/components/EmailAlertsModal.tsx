@@ -65,7 +65,7 @@ export const EmailAlertsModal: React.FC<EmailAlertsModalProps> = ({
       const activeSettings: EmailAlertSettings = {
         ...settings,
         sendMethod: forceMethod || settings.sendMethod || 'webhook',
-        webhookUrl: settings.webhookUrl || 'https://hooks.zapier.com/hooks/catch/29297098/49i2beh/',
+        webhookUrl: settings.webhookUrl || 'https://hook.eu1.make.com/j469ypwvo8cpihjazbqq25htixq4yu4h',
         recipientEmail: settings.recipientEmail || 'Greenimpianti225@gmail.com',
       };
       saveEmailSettings(activeSettings);

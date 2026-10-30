@@ -10,7 +10,7 @@ export const DEFAULT_EMAIL_SETTINGS: EmailAlertSettings = {
   leadDays: [30, 15, 7, 3, 1],
   autoNotifyOnOpen: true,
   sendMethod: 'webhook',
-  webhookUrl: 'https://hooks.zapier.com/hooks/catch/29297098/49i2beh/',
+  webhookUrl: 'https://hook.eu1.make.com/j469ypwvo8cpihjazbqq25htixq4yu4h',
   emailJsServiceId: '',
   emailJsTemplateId: '',
   emailJsPublicKey: '',
@@ -26,7 +26,7 @@ export function loadEmailSettings(): EmailAlertSettings {
       ...DEFAULT_EMAIL_SETTINGS,
       ...parsed,
       recipientEmail: parsed.recipientEmail || 'Greenimpianti225@gmail.com',
-      webhookUrl: parsed.webhookUrl || 'https://hooks.zapier.com/hooks/catch/29297098/49i2beh/',
+      webhookUrl: parsed.webhookUrl || 'https://hook.eu1.make.com/j469ypwvo8cpihjazbqq25htixq4yu4h',
       sendMethod: parsed.sendMethod === 'emailjs' ? 'emailjs' : 'webhook',
     };
   } catch {

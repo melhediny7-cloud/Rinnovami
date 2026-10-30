@@ -79,9 +79,9 @@ async function run() {
     emailBody += `• ${d.title}\n  Numero: ${d.number}\n  Intestatario: ${d.holder}\n  Scadenza: ${d.expiryDate} (${d.isExpired ? `Scaduto da ${Math.abs(d.daysRemaining)} gg` : `Mancano ${d.daysRemaining} gg`})\n\n`;
   });
 
-  // Dispatch directly to Zapier Webhook
-  const ZAPIER_WEBHOOK = process.env.ZAPIER_WEBHOOK_URL || 'https://hooks.zapier.com/hooks/catch/29297098/49i2beh/';
-  console.log(`Dispatching alert to Zapier Webhook (${ZAPIER_WEBHOOK})...`);
+  // Dispatch directly to Webhook (Make.com / Zapier)
+  const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://hook.eu1.make.com/j469ypwvo8cpihjazbqq25htixq4yu4h';
+  console.log(`Dispatching alert to Webhook (${WEBHOOK_URL})...`);
   try {
     const payload = JSON.stringify({
       title: urgent[0].title,
@@ -97,14 +97,14 @@ async function run() {
       urgentCount: urgent.length,
       timestamp: new Date().toISOString()
     });
-    const res = await fetch(ZAPIER_WEBHOOK, {
+    const res = await fetch(WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: payload
     });
-    console.log('Zapier Webhook response:', res.status, await res.text());
+    console.log('Webhook response:', res.status, await res.text());
   } catch (err) {
-    console.error('Failed to dispatch to Zapier:', err.message);
+    console.error('Failed to dispatch to Webhook:', err.message);
   }
 
   // If RESEND_API_KEY is available, also send real email via Resend API
