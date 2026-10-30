@@ -59,10 +59,19 @@ export const EmailAlertsModal: React.FC<EmailAlertsModalProps> = ({
     onToast(lang === 'ar' ? 'تم حفظ إعدادات التنبيهات البريدية!' : 'Impostazioni email salvate!');
   };
 
-  const handleSendReport = async (isTest = false) => {
+  const handleSendReport = async (isTest = false, forceMethod?: 'webhook' | 'mailto' | 'emailjs') => {
     setIsSending(true);
     try {
-      const result = await dispatchEmailAlert(settings, documents, lang, isTest);
+      const activeSettings: EmailAlertSettings = {
+        ...settings,
+        sendMethod: forceMethod || settings.sendMethod || 'webhook',
+        webhookUrl: settings.webhookUrl || 'https://hooks.zapier.com/hooks/catch/29297098/49i2beh/',
+        recipientEmail: settings.recipientEmail || 'Greenimpianti225@gmail.com',
+      };
+      saveEmailSettings(activeSettings);
+      setSettings(activeSettings);
+
+      const result = await dispatchEmailAlert(activeSettings, documents, lang, isTest);
       onToast(result.message);
       if (result.success) {
         setSettings(loadEmailSettings());
@@ -362,7 +371,7 @@ node scripts/cron-email-notifier.js --backup=rinnovami-backup.json --to=${settin
                     />
                     <button
                       type="button"
-                      onClick={() => handleSendReport(true)}
+                      onClick={() => handleSendReport(true, 'webhook')}
                       disabled={isSending}
                       className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 shrink-0 transition-colors shadow-sm"
                     >
