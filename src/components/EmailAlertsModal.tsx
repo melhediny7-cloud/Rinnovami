@@ -301,6 +301,21 @@ node scripts/cron-email-notifier.js --backup=rinnovami-backup.json --to=${settin
                   >
                     {lang === 'ar' ? 'رسالة تجريبية' : 'Email di Prova'}
                   </button>
+
+                  <button
+                    onClick={() => {
+                      const rep = formatEmailReport(documents, lang, settings.recipientEmail, false);
+                      const su = encodeURIComponent(rep.subject);
+                      const body = encodeURIComponent(rep.plainText);
+                      const to = encodeURIComponent(settings.recipientEmail || 'Greenimpianti225@gmail.com');
+                      window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${body}`, '_blank');
+                    }}
+                    type="button"
+                    className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs"
+                  >
+                    <Mail className="w-3.5 h-3.5 text-rose-500" />
+                    <span>{lang === 'ar' ? 'أو فتح وإرسال التقرير عبر Gmail مباشرة ✉️' : 'Oppure apri e invia direttamente da Gmail Web ✉️'}</span>
+                  </button>
                 </div>
               </div>
             </>
