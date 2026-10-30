@@ -19,7 +19,7 @@ export const DEFAULT_WHATSAPP_SETTINGS: WhatsAppAlertSettings = {
   sendMethod: 'greenapi',
   webhookUrl: '',
   apiInstanceId: '710722786421',
-  apiToken: '',
+  apiToken: '1bf9440a96a94c18a56eb9d2a719eede4a958933c8564aa5a2',
   lastNotifiedDate: undefined,
 };
 
@@ -37,6 +37,7 @@ export function loadWhatsAppSettings(): WhatsAppAlertSettings {
           ? parsed.recipientPhones
           : DEFAULT_WHATSAPP_PHONES,
       apiInstanceId: parsed.apiInstanceId || '710722786421',
+      apiToken: parsed.apiToken || '1bf9440a96a94c18a56eb9d2a719eede4a958933c8564aa5a2',
       sendMethod: parsed.sendMethod || 'greenapi',
     };
   } catch {

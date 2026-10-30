@@ -1,5 +1,6 @@
 import { DocumentItem, Language } from '../types';
 import { loadEmailSettings, getExpiringDocumentsForAlert, dispatchEmailAlert } from './emailAlertService';
+import { loadWhatsAppSettings, dispatchWhatsAppAlert } from './whatsappAlertService';
 import { logActivity } from './auditLogger';
 
 const LAST_AUTO_ALERT_KEY = 'rinnovami_last_auto_alert_date';
@@ -13,7 +14,7 @@ export interface AutoCheckResult {
 
 /**
  * Autonomous check that runs in the background.
- * Inspects documents and automatically dispatches alert notifications (Zapier / Email)
+ * Inspects documents and automatically dispatches alert notifications (Make.com Email + Green API WhatsApp)
  * if there are documents expiring soon, without requiring manual user intervention.
  */
 export async function checkAndDispatchAutonomousAlerts(
@@ -22,9 +23,10 @@ export async function checkAndDispatchAutonomousAlerts(
   force = false
 ): Promise<AutoCheckResult> {
   const settings = loadEmailSettings();
+  const whatsAppSettings = loadWhatsAppSettings();
 
   // If email notifications disabled, stop
-  if (!settings.enabled) {
+  if (!settings.enabled && !whatsAppSettings.enabled) {
     return {
       triggered: false,
       count: 0,
@@ -61,9 +63,19 @@ export async function checkAndDispatchAutonomousAlerts(
     };
   }
 
-  // Dispatch alert to Zapier / Webhook automatically
+  // Dispatch alert to Webhook / Email automatically
   try {
-    const result = await dispatchEmailAlert(settings, documents, lang, false);
+    let emailResult = { success: false, message: '' };
+    if (settings.enabled) {
+      emailResult = await dispatchEmailAlert(settings, documents, lang, false);
+    }
+
+    // Also dispatch WhatsApp automatically via Green API if configured
+    if (whatsAppSettings.enabled && whatsAppSettings.sendMethod === 'greenapi' && whatsAppSettings.apiToken) {
+      await dispatchWhatsAppAlert(whatsAppSettings, documents, lang, false).catch((e) => {
+        console.warn('Auto WhatsApp dispatch warning:', e);
+      });
+    }
     
     // Save last alert date
     localStorage.setItem(LAST_AUTO_ALERT_KEY, todayStr);
@@ -71,22 +83,22 @@ export async function checkAndDispatchAutonomousAlerts(
     // Audit log
     logActivity(
       'export',
-      lang === 'ar' ? 'تنبيه ذكي تلقائي' : 'Avviso Automatico Smart',
+      lang === 'ar' ? 'تنبيه ذكي شامل' : 'Avviso Automatico Smart',
       lang === 'ar'
-        ? `أرسل البرنامج تنبيهاً ذاتياً بـ (${allUrgent.length}) وثائق قاربت على الانتهاء إلى ${settings.recipientEmail}`
-        : `Inviato avviso automatico per (${allUrgent.length}) documenti in scadenza a ${settings.recipientEmail}`
+        ? `أرسل البرنامج تنبيهاً ذاتياً بـ (${allUrgent.length}) وثائق للإيميل والواتساب للأرقام المعتمدة.`
+        : `Inviato avviso automatico per (${allUrgent.length}) documenti a Email e WhatsApp.`
     );
 
     const successMsg =
       lang === 'ar'
-        ? `🤖 تنبيه ذكي تلقائي: رصد البرنامج (${allUrgent.length}) وثائق قاربت على الانتهاء وأرسل إشعاراً لبريدك.`
-        : `🤖 Smart Alert: Rilevati (${allUrgent.length}) documenti in scadenza. Notifica inviata automaticamente.`;
+        ? `🤖 تنبيه ذكي تلقائي: رصد البرنامج (${allUrgent.length}) وثائق قاربت على الانتهاء وأرسل إشعاراً للإيميل والواتساب.`
+        : `🤖 Smart Alert: Rilevati (${allUrgent.length}) documenti in scadenza. Notifiche inviate a Email e WhatsApp.`;
 
     return {
       triggered: true,
       count: allUrgent.length,
       reason: 'dispatched',
-      message: result.success ? successMsg : result.message,
+      message: successMsg,
     };
   } catch (err: any) {
     return {
