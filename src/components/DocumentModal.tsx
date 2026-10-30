@@ -114,17 +114,17 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
     if (!isMountedRef.current) return;
     setParsedResult(data);
 
-    // Apply data intelligently: only overwrite if current field is empty
+    // Apply parsed data directly from the document OCR
     if (data.title && !title) setTitle(data.title);
     if (data.category && data.category !== 'altro') setCategory(data.category);
-    if (data.documentNumber && !documentNumber) setDocumentNumber(data.documentNumber);
-    if (data.holderName && !holderName) setHolderName(data.holderName);
-    if (data.issueDate && !issueDate) setIssueDate(data.issueDate);
+    if (data.documentNumber) setDocumentNumber(data.documentNumber);
+    if (data.holderName) setHolderName(data.holderName);
+    if (data.issueDate) setIssueDate(data.issueDate);
     if (data.expiryDate) {
       setExpiryDate(data.expiryDate);
       setIsDateEstimated(!!data.isExpiryEstimated);
     }
-    if (data.issuingAuthority && !issuingAuthority) setIssuingAuthority(data.issuingAuthority);
+    if (data.issuingAuthority) setIssuingAuthority(data.issuingAuthority);
   };
 
   const handleFileUpload = async (file: File) => {

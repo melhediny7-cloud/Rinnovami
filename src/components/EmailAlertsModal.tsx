@@ -98,22 +98,22 @@ node scripts/cron-email-notifier.js --backup=rinnovami-backup.json --to=${settin
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
-        className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
         dir={lang === 'ar' ? 'rtl' : 'ltr'}
       >
         {/* Header */}
-        <div className="px-6 py-5 bg-gradient-to-r from-brand-600 to-indigo-600 text-white flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 bg-gradient-to-r from-brand-600 to-indigo-600 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-white/10 rounded-2xl backdrop-blur-md">
-              <Mail className="w-6 h-6 text-white" />
+            <div className="p-2 sm:p-2.5 bg-white/10 rounded-2xl backdrop-blur-md shrink-0">
+              <Mail className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold">
+              <h2 className="text-base sm:text-lg font-bold">
                 {lang === 'ar' ? 'التنبيهات البريدية التلقائية' : 'Notifiche Email Automatiche'}
               </h2>
-              <p className="text-xs text-white/80">
+              <p className="text-[11px] sm:text-xs text-white/80">
                 {lang === 'ar' 
                   ? 'استقبل تقارير دورية وتنبيهات فورية قبل انتهاء صلاحية وثائقك' 
                   : 'Ricevi promemoria e avvisi prima della scadenza dei documenti'}
@@ -122,17 +122,17 @@ node scripts/cron-email-notifier.js --backup=rinnovami-backup.json --to=${settin
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+            className="p-1.5 sm:p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-6 gap-2">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-3 sm:px-6 gap-1 sm:gap-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab('settings')}
-            className={`py-3 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === 'settings'
                 ? 'border-brand-600 text-brand-600 dark:text-brand-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -144,31 +144,31 @@ node scripts/cron-email-notifier.js --backup=rinnovami-backup.json --to=${settin
 
           <button
             onClick={() => setActiveTab('integrations')}
-            className={`py-3 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === 'integrations'
                 ? 'border-brand-600 text-brand-600 dark:text-brand-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             <Sparkles className="w-4 h-4 text-indigo-500" />
-            <span>{lang === 'ar' ? 'الربط السحابي (Webhook / EmailJS)' : 'Integrazioni Cloud'}</span>
+            <span>{lang === 'ar' ? 'الربط السحابي' : 'Cloud'}</span>
           </button>
 
           <button
             onClick={() => setActiveTab('cron')}
-            className={`py-3 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === 'cron'
                 ? 'border-brand-600 text-brand-600 dark:text-brand-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             <Terminal className="w-4 h-4 text-emerald-500" />
-            <span>{lang === 'ar' ? 'أتمتة 24/7 (Cron Script)' : 'Automazione 24/7'}</span>
+            <span>{lang === 'ar' ? 'أتمتة (Cron)' : 'Cron'}</span>
           </button>
         </div>
 
         {/* Body Content */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6 flex-1">
           {activeTab === 'settings' && (
             <>
               {/* Recipient Email Input */}

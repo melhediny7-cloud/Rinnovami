@@ -137,6 +137,19 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
             </span>
           </div>
 
+          {/* Issue Date (if available) */}
+          {doc.issueDate && (
+            <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800/60">
+              <span className="flex items-center gap-1.5 text-slate-400">
+                <Calendar className="w-3.5 h-3.5 text-sky-500" />
+                <span>{lang === 'ar' ? 'تاريخ الإصدار:' : 'Data Rilascio:'}</span>
+              </span>
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                {formatDateLocale(doc.issueDate, lang)}
+              </span>
+            </div>
+          )}
+
           {/* Holder Name */}
           {doc.holderName && (
             <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800/60">

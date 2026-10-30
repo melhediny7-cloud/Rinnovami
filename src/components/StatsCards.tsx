@@ -93,7 +93,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 my-6">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-4 my-4 sm:my-6">
       {cards.map((c) => {
         const Icon = c.icon;
         const isSelected = selectedStatus === c.id;
@@ -102,10 +102,10 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
           <button
             key={c.id}
             onClick={() => onSelectStatus(c.id)}
-            className={`relative p-4 rounded-2xl text-start transition-all border ${
+            className={`relative p-3 sm:p-4 rounded-2xl text-start transition-all border first:col-span-2 sm:first:col-span-1 ${
               isSelected
                 ? `bg-white dark:bg-slate-900 border-transparent shadow-lg ring-2 ${c.activeRing}`
-                : 'bg-white/60 dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800/80 hover:bg-white dark:hover:bg-slate-900 shadow-sm'
+                : 'bg-white/70 dark:bg-slate-900/70 border-slate-200/80 dark:border-slate-800/80 hover:bg-white dark:hover:bg-slate-900 shadow-sm'
             }`}
           >
             <div className="flex items-center justify-between mb-2">

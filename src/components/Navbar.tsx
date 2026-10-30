@@ -53,36 +53,36 @@ export const Navbar: React.FC<NavbarProps> = ({
   const t = translations[lang];
 
   return (
-    <header className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
+    <header className="sticky top-0 z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 shadow-sm transition-colors">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 sm:h-20 gap-2">
           
           {/* Logo & Title */}
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-500 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-brand-500/25 ring-4 ring-brand-500/10 transition-transform hover:scale-105">
-              <FileCheck2 className="w-7 h-7" />
+          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-brand-500 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-brand-500/25 ring-2 sm:ring-4 ring-brand-500/10 transition-transform hover:scale-105">
+              <FileCheck2 className="w-5 h-5 sm:w-7 sm:h-7" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-black bg-gradient-to-r from-brand-600 via-indigo-600 to-cyan-500 bg-clip-text text-transparent tracking-tight">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h1 className="text-lg sm:text-2xl font-black bg-gradient-to-r from-brand-600 via-indigo-600 to-cyan-500 bg-clip-text text-transparent tracking-tight">
                   {lang === 'ar' ? 'Rinnovami | رينوفامي' : 'Rinnovami'}
                 </h1>
                 <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                   {lang === 'ar' ? 'جـدّدلي' : 'App Ufficiale'}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:block">
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:block">
                 {t.appSubTitle}
               </p>
             </div>
           </div>
 
           {/* Quick Actions & Toggles */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Guide Button */}
+          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3">
+            {/* Guide Button - Desktop & Tablet */}
             <button
               onClick={onOpenGuide}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
+              className="hidden md:inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
               title={t.nav.renewalGuide}
             >
               <BookOpen className="w-4 h-4 text-brand-500" />
@@ -92,7 +92,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Calendar Export */}
             <button
               onClick={onOpenCalendar}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
+              className="hidden md:inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
               title={t.nav.exportCalendar}
             >
               <CalendarDays className="w-4 h-4 text-indigo-500" />
@@ -102,47 +102,47 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Email Alerts Modal */}
             <button
               onClick={onOpenEmailAlerts}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
+              className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
               title={lang === 'ar' ? 'التنبيهات البريدية التلقائية' : 'Notifiche Email'}
             >
               <Mail className="w-4 h-4 text-rose-500" />
-              <span className="hidden lg:inline">{lang === 'ar' ? 'تنبيهات الإيميل' : 'Email Alert'}</span>
+              <span className="hidden xl:inline">{lang === 'ar' ? 'تنبيهات الإيميل' : 'Email'}</span>
             </button>
 
             {/* WhatsApp Alerts Modal */}
             <button
               onClick={onOpenWhatsAppAlerts}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 border border-emerald-200/60 dark:border-emerald-800/60 transition-colors"
+              className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 border border-emerald-200/60 dark:border-emerald-800/60 transition-colors"
               title={lang === 'ar' ? 'تنبيهات ورسائل واتساب' : 'Notifiche WhatsApp'}
             >
               <MessageSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span className="hidden lg:inline">{lang === 'ar' ? 'واتساب' : 'WhatsApp'}</span>
+              <span className="hidden xl:inline">{lang === 'ar' ? 'واتساب' : 'WhatsApp'}</span>
             </button>
 
             {/* Wallpaper Modal Trigger */}
             <button
               onClick={onOpenWallpaper}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
+              className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
               title={lang === 'ar' ? 'خلفية التطبيق للشاشة' : 'Sfondo per smartphone'}
             >
               <Sparkles className="w-4 h-4 text-emerald-500" />
-              <span className="hidden xl:inline">{lang === 'ar' ? 'خلفية الجوال' : 'Sfondo HD'}</span>
+              <span className="hidden xl:inline">{lang === 'ar' ? 'خلفية الجوال' : 'Sfondo'}</span>
             </button>
 
-            {/* Backup / Export / Import - accessible on mobile & desktop */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+            {/* Backup / Export / Import */}
+            <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 sm:p-1 rounded-xl">
               <button
                 onClick={onExportBackup}
                 className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition-all"
                 title={t.nav.exportBackup}
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
               <label 
                 className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition-all cursor-pointer"
                 title={t.nav.importBackup}
               >
-                <Upload className="w-4 h-4" />
+                <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <input
                   type="file"
                   accept=".json"
@@ -152,10 +152,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               </label>
             </div>
 
-            {/* Urgent Notification Bell - RTL fixed */}
+            {/* Urgent Notification Bell */}
             <div className="relative">
               <div 
-                className={`p-2.5 rounded-xl transition-colors ${
+                className={`p-1.5 sm:p-2.5 rounded-xl transition-colors ${
                   urgentCount > 0 
                     ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 ring-2 ring-rose-500/20' 
                     : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
@@ -166,9 +166,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : (lang === 'ar' ? 'جميع الوثائق سارية' : 'Tutti i documenti regolari')
                 }
               >
-                <Bell className={`w-4 h-4 ${urgentCount > 0 ? 'animate-bounce' : ''}`} />
+                <Bell className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${urgentCount > 0 ? 'animate-bounce' : ''}`} />
                 {urgentCount > 0 && (
-                  <span className="absolute -top-1 -end-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 text-[10px] font-bold text-white shadow-md">
+                  <span className="absolute -top-1 -end-1 flex h-4 w-4 sm:h-5 sm:w-5 items-center justify-center rounded-full bg-rose-600 text-[9px] sm:text-[10px] font-bold text-white shadow-md">
                     {urgentCount}
                   </span>
                 )}
@@ -178,29 +178,29 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Language Selector */}
             <button
               onClick={() => onLanguageChange(lang === 'ar' ? 'it' : 'ar')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold text-brand-700 dark:text-brand-300 bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/50 dark:hover:bg-brand-900/50 border border-brand-200/60 dark:border-brand-800/60 transition-colors"
+              className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold text-brand-700 dark:text-brand-300 bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/50 dark:hover:bg-brand-900/50 border border-brand-200/60 dark:border-brand-800/60 transition-colors"
               title="تغيير اللغة / Cambia lingua"
             >
-              <Languages className="w-4 h-4" />
-              <span>{lang === 'ar' ? '🇮🇹 Italiano' : '🇸🇦 العربية'}</span>
+              <Languages className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="text-[11px] sm:text-xs font-bold">{lang === 'ar' ? '🇮🇹 IT' : '🇸🇦 AR'}</span>
             </button>
 
             {/* Dark Mode Toggle */}
             <button
               onClick={onToggleTheme}
-              className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
+              className="p-1.5 sm:p-2.5 rounded-xl text-slate-600 dark:text-slate-300 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
               title="تبديل الوضع الليلي / Cambia tema"
             >
-              {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+              {darkMode ? <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" /> : <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600" />}
             </button>
 
             {/* Add Document Button */}
             <button
               onClick={onOpenAddModal}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-xs sm:text-sm bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-white text-xs sm:text-sm bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>{t.nav.addDoc}</span>
+              <span className="hidden sm:inline">{t.nav.addDoc}</span>
             </button>
           </div>
         </div>

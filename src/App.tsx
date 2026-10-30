@@ -44,7 +44,7 @@ export const App: React.FC = () => {
     return (
       (localStorage.getItem('rinnovami_lang') as Language) ||
       (localStorage.getItem('docuscadenza_lang') as Language) ||
-      'ar'
+      'it'
     );
   });
 
@@ -80,7 +80,8 @@ export const App: React.FC = () => {
   const [autoScanQueue, setAutoScanQueue] = useState<AutoScanProgressItem[]>([]);
   const [isAutoScanModalOpen, setIsAutoScanModalOpen] = useState(false);
   const [isAppBackgroundActive, setIsAppBackgroundActive] = useState<boolean>(() => {
-    return localStorage.getItem('rinnovami_bg_active') === 'true';
+    const saved = localStorage.getItem('rinnovami_bg_active');
+    return saved !== null ? saved === 'true' : true;
   });
 
   // Toast feedback message
@@ -371,15 +372,15 @@ export const App: React.FC = () => {
   return (
     <div className={`relative min-h-screen bg-slate-50 dark:bg-slate-950 font-${lang === 'ar' ? 'arabic' : 'latin'}`}>
       
-      {/* Optional Ambient App Background */}
+      {/* App Ambient Wallpaper Background */}
       {isAppBackgroundActive && (
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
           <img
-            src="./rinnovami-wallpaper.jpg"
-            alt="Ambient Background"
-            className="w-full h-full object-cover opacity-15 dark:opacity-25 blur-2xl scale-110"
+            src="./rinnovami-wallpaper.png"
+            alt="Rinnovami Wallpaper"
+            className="w-full h-full object-cover opacity-25 dark:opacity-35 object-center"
           />
-          <div className="absolute inset-0 bg-slate-50/60 dark:bg-slate-950/60 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-slate-50/75 dark:bg-slate-950/75 backdrop-blur-[2px]" />
         </div>
       )}
 
@@ -428,7 +429,7 @@ export const App: React.FC = () => {
         />
 
         {/* Hero / Header Headline */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-6 pb-2">
           
           {/* Demo Documents Notice Banner */}
           {hasDemoDocs && (
@@ -628,7 +629,7 @@ export const App: React.FC = () => {
         isOpen={isWallpaperModalOpen}
         onClose={() => setIsWallpaperModalOpen(false)}
         lang={lang}
-        wallpaperUrl="./rinnovami-wallpaper.jpg"
+        wallpaperUrl="./rinnovami-wallpaper.png"
         isAppBackgroundActive={isAppBackgroundActive}
         onToggleAppBackground={() => {
           setIsAppBackgroundActive((prev) => {

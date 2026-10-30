@@ -156,27 +156,27 @@ node scripts/cron-whatsapp-notifier.js --backup=rinnovami-backup.json --phone=+$
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
-        className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
         dir={lang === 'ar' ? 'rtl' : 'ltr'}
       >
         {/* Header with WhatsApp branding */}
-        <div className="px-6 py-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-white/15 rounded-2xl backdrop-blur-md">
-              <MessageSquare className="w-6 h-6 text-white" />
+            <div className="p-2 sm:p-2.5 bg-white/15 rounded-2xl backdrop-blur-md shrink-0">
+              <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold">
+                <h2 className="text-base sm:text-lg font-bold">
                   {lang === 'ar' ? 'تنبيهات ورسائل واتساب' : 'Notifiche WhatsApp'}
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white">
                   WhatsApp Direct
                 </span>
               </div>
-              <p className="text-xs text-white/85">
+              <p className="text-[11px] sm:text-xs text-white/85">
                 {lang === 'ar' 
                   ? 'إرسال رسائل تذكير عاجلة لوثائقك الإيطالية مباشرة إلى رقم هاتفك' 
                   : 'Invia promemoria istantanei per i tuoi documenti italiani su WhatsApp'}
@@ -185,17 +185,17 @@ node scripts/cron-whatsapp-notifier.js --backup=rinnovami-backup.json --phone=+$
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+            className="p-1.5 sm:p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-6 gap-2">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-3 sm:px-6 gap-1 sm:gap-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab('settings')}
-            className={`py-3 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === 'settings'
                 ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -207,7 +207,7 @@ node scripts/cron-whatsapp-notifier.js --backup=rinnovami-backup.json --phone=+$
 
           <button
             onClick={() => setActiveTab('integrations')}
-            className={`py-3 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === 'integrations'
                 ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -219,7 +219,7 @@ node scripts/cron-whatsapp-notifier.js --backup=rinnovami-backup.json --phone=+$
 
           <button
             onClick={() => setActiveTab('cron')}
-            className={`py-3 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === 'cron'
                 ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -231,7 +231,7 @@ node scripts/cron-whatsapp-notifier.js --backup=rinnovami-backup.json --phone=+$
         </div>
 
         {/* Body Content */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6 flex-1">
           {activeTab === 'settings' && (
             <>
               {/* Pre-configured WhatsApp Recipient Numbers */}
