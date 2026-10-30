@@ -15,7 +15,7 @@ const path = require('path');
 
 // Configuration via environment or arguments
 const BACKUP_FILE = process.env.RINNOVAMI_BACKUP_PATH || process.argv.find(a => a.startsWith('--backup='))?.split('=')[1] || path.join(__dirname, '../rinnovami-backup.json');
-const RECIPIENT_EMAIL = process.env.ALERT_EMAIL_TO || process.argv.find(a => a.startsWith('--to='))?.split('=')[1] || 'your-email@example.com';
+const RECIPIENT_EMAIL = process.env.ALERT_EMAIL_TO || process.argv.find(a => a.startsWith('--to='))?.split('=')[1] || 'Greenimpianti225@gmail.com';
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
 function calculateDaysRemaining(expiryDateStr) {

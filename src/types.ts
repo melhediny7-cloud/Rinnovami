@@ -62,7 +62,8 @@ export interface EmailAlertSettings {
 
 export interface WhatsAppAlertSettings {
   enabled: boolean;
-  recipientPhone: string; // e.g. +393331234567
+  recipientPhone: string; // primary phone e.g. +393331785636
+  recipientPhones: string[]; // e.g. ['+393331785636', '+393802633225', '+393298993363']
   leadDays: number[]; // e.g. [30, 15, 7, 1]
   autoNotifyOnOpen: boolean;
   sendMethod: 'direct' | 'webhook' | 'greenapi' | 'ultramsg';

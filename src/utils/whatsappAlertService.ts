@@ -4,11 +4,18 @@ import { translations } from '../translations';
 
 const WHATSAPP_SETTINGS_STORAGE_KEY = 'rinnovami_whatsapp_settings_v1';
 
+export const DEFAULT_WHATSAPP_PHONES = [
+  '+393331785636',
+  '+393802633225',
+  '+393298993363',
+];
+
 export const DEFAULT_WHATSAPP_SETTINGS: WhatsAppAlertSettings = {
-  enabled: false,
-  recipientPhone: '',
+  enabled: true,
+  recipientPhone: '+393331785636',
+  recipientPhones: DEFAULT_WHATSAPP_PHONES,
   leadDays: [30, 15, 7, 1],
-  autoNotifyOnOpen: false,
+  autoNotifyOnOpen: true,
   sendMethod: 'direct',
   webhookUrl: '',
   apiInstanceId: '',
@@ -20,7 +27,16 @@ export function loadWhatsAppSettings(): WhatsAppAlertSettings {
   try {
     const raw = localStorage.getItem(WHATSAPP_SETTINGS_STORAGE_KEY);
     if (!raw) return DEFAULT_WHATSAPP_SETTINGS;
-    return { ...DEFAULT_WHATSAPP_SETTINGS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    return {
+      ...DEFAULT_WHATSAPP_SETTINGS,
+      ...parsed,
+      recipientPhone: parsed.recipientPhone || '+393331785636',
+      recipientPhones:
+        Array.isArray(parsed.recipientPhones) && parsed.recipientPhones.length > 0
+          ? parsed.recipientPhones
+          : DEFAULT_WHATSAPP_PHONES,
+    };
   } catch {
     return DEFAULT_WHATSAPP_SETTINGS;
   }

@@ -14,7 +14,11 @@ const fs = require('fs');
 const path = require('path');
 
 const BACKUP_FILE = process.env.RINNOVAMI_BACKUP_PATH || process.argv.find(a => a.startsWith('--backup='))?.split('=')[1] || path.join(__dirname, '../rinnovami-backup.json');
-const RECIPIENT_PHONE = process.env.ALERT_PHONE_TO || process.argv.find(a => a.startsWith('--phone='))?.split('=')[1] || '+393331234567';
+const DEFAULT_TARGET_PHONES = ['+393331785636', '+393802633225', '+393298993363'];
+const TARGET_PHONES = process.env.ALERT_PHONES
+  ? process.env.ALERT_PHONES.split(',')
+  : DEFAULT_TARGET_PHONES;
+
 const GREEN_API_INSTANCE = process.env.GREEN_API_INSTANCE;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 
@@ -80,32 +84,31 @@ async function run() {
   });
   msg += `💡 يرجى البدء في حجز المواعيد مبكراً.\n_تطبيق Rinnovami_`;
 
-  const phone = cleanPhone(RECIPIENT_PHONE);
+  for (const rawPhone of TARGET_PHONES) {
+    const phone = cleanPhone(rawPhone);
+    if (!phone) continue;
 
-  // If Green API configured, send directly via API
-  if (GREEN_API_INSTANCE && GREEN_API_TOKEN) {
-    console.log(`Sending WhatsApp message to ${phone} via Green API...`);
-    try {
-      const url = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE}/sendMessage/${GREEN_API_TOKEN}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chatId: `${phone}@c.us`,
-          message: msg
-        })
-      });
-      const data = await res.json();
-      console.log('WhatsApp message sent successfully:', data);
-    } catch (err) {
-      console.error('Failed to send WhatsApp message:', err.message);
+    if (GREEN_API_INSTANCE && GREEN_API_TOKEN) {
+      console.log(`Sending WhatsApp message to +${phone} via Green API...`);
+      try {
+        const url = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE}/sendMessage/${GREEN_API_TOKEN}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chatId: `${phone}@c.us`,
+            message: msg
+          })
+        });
+        const data = await res.json();
+        console.log(`WhatsApp sent to +${phone}:`, data);
+      } catch (err) {
+        console.error(`Failed to send WhatsApp to +${phone}:`, err.message);
+      }
+    } else {
+      console.log(`\n--- WhatsApp Notification for +${phone} ---`);
+      console.log(`Direct Link: https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);
     }
-  } else {
-    console.log('\n--- WhatsApp Message Preview ---');
-    console.log(`To: +${phone}`);
-    console.log(`Message:\n${msg}`);
-    console.log('\nDirect WhatsApp Link:\n' + `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);
-    console.log('\nTip: Set GREEN_API_INSTANCE and GREEN_API_TOKEN for fully automatic WhatsApp delivery.');
   }
 }
 

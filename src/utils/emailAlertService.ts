@@ -5,10 +5,10 @@ import { translations } from '../translations';
 const EMAIL_SETTINGS_STORAGE_KEY = 'rinnovami_email_alert_settings_v1';
 
 export const DEFAULT_EMAIL_SETTINGS: EmailAlertSettings = {
-  enabled: false,
-  recipientEmail: '',
+  enabled: true,
+  recipientEmail: 'Greenimpianti225@gmail.com',
   leadDays: [30, 15, 7, 1],
-  autoNotifyOnOpen: false,
+  autoNotifyOnOpen: true,
   sendMethod: 'mailto',
   webhookUrl: '',
   emailJsServiceId: '',
@@ -21,7 +21,12 @@ export function loadEmailSettings(): EmailAlertSettings {
   try {
     const raw = localStorage.getItem(EMAIL_SETTINGS_STORAGE_KEY);
     if (!raw) return DEFAULT_EMAIL_SETTINGS;
-    return { ...DEFAULT_EMAIL_SETTINGS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    return {
+      ...DEFAULT_EMAIL_SETTINGS,
+      ...parsed,
+      recipientEmail: parsed.recipientEmail || 'Greenimpianti225@gmail.com',
+    };
   } catch {
     return DEFAULT_EMAIL_SETTINGS;
   }
