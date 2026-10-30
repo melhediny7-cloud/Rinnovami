@@ -38,7 +38,7 @@ export function computeDocumentStatus(
   _reminderDays: number = 60,
   needsReview: boolean = false
 ): DocumentStatus {
-  if (needsReview) return 'review';
+  // Autonomously compute status based on actual days without review blockage
   const days = getDaysRemaining(expiryDateStr);
   if (days < 0) return 'expired';
   if (days <= 30) return 'critical';

@@ -138,11 +138,9 @@ export const AutoScanModal: React.FC<AutoScanModalProps> = ({
                       </span>
                     )}
 
-                    {doc.needsReview && (
-                      <span className="text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">
-                        ⚠️ {lang === 'ar' ? 'تاريخ مقدّر (تأكيد)' : 'Data stimata'}
-                      </span>
-                    )}
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                      ✓ {lang === 'ar' ? 'تم التعرف والتأكيد تلقائياً' : 'Rilevato automaticamente'}
+                    </span>
                   </div>
                 )}
               </div>

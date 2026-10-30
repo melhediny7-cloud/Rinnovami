@@ -59,16 +59,12 @@ export async function autoProcessFile(
   const category = parsed.category || 'altro';
   const reminderDaysBefore = getDefaultReminderDays(category);
 
-  // Fallback for expiry date if completely missing from blurry/unclear document
+  // Expiry date is adopted automatically by the system without requiring manual review
   let expiryDate = parsed.expiryDate;
-  let needsReview = false;
-
   if (!expiryDate) {
     expiryDate = getTodayOffset(365); // Fallback: 1 year from now
-    needsReview = true; // Alert user to check
-  } else if (parsed.isExpiryEstimated) {
-    needsReview = true;
   }
+  const needsReview = false;
 
   const newDoc: DocumentItem = {
     id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,

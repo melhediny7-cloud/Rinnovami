@@ -105,8 +105,17 @@ export async function loadDocuments(): Promise<DocumentItem[]> {
     // Strictly keep only non-demo user documents
     const realDocs = (rawDocs || []).filter((d) => !isDemoDoc(d));
 
-    // If there were any demo documents saved previously in IndexedDB, purge them immediately
-    if (realDocs.length !== (rawDocs || []).length) {
+    // Automatically resolve any legacy needsReview flags so the user is never asked for manual verification
+    let needsUpdate = realDocs.length !== (rawDocs || []).length;
+    for (const d of realDocs) {
+      if (d.needsReview) {
+        d.needsReview = false;
+        needsUpdate = true;
+      }
+    }
+
+    // Persist immediately if demo docs were purged or needsReview was cleared
+    if (needsUpdate) {
       await saveDocuments(realDocs);
     }
 

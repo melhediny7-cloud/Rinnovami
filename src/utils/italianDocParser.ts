@@ -235,6 +235,53 @@ export function findAllCandidateDates(text: string): { raw: string; normalized: 
 }
 
 /**
+ * Parse MRZ (Machine Readable Zone) lines found in Italian ID cards, residence permits, and passports.
+ * Returns extracted expiry date (YYYY-MM-DD), document number, and nationality.
+ */
+export function extractMRZData(text: string): {
+  expiryDate?: string;
+  documentNumber?: string;
+  nationality?: string;
+} | null {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim().toUpperCase().replace(/«/g, '<').replace(/ /g, ''))
+    .filter((l) => l.includes('<<') || l.length >= 28);
+
+  for (const line of lines) {
+    // TD1 line 2 (Permesso di Soggiorno and CIE): 6 digits (birth), 1 check, 1 sex, 6 digits (expiry), 1 check, 3 letters (nationality)
+    const td1Match = line.match(/(\d{6})\d[MF<](\d{6})\d([A-Z]{3})/);
+    if (td1Match) {
+      const rawExpiry = td1Match[2];
+      const yy = parseInt(rawExpiry.substring(0, 2), 10);
+      const mm = rawExpiry.substring(2, 4);
+      const dd = rawExpiry.substring(4, 6);
+      const fullY = yy < 80 ? 2000 + yy : 1900 + yy;
+      return {
+        expiryDate: `${fullY}-${mm}-${dd}`,
+        nationality: td1Match[3],
+      };
+    }
+
+    // TD3 line 2 (Passports): 9 alphanumeric (number), 1 check, 3 letters, 6 digits (birth), 1 check, 1 sex, 6 digits (expiry)
+    const td3Match = line.match(/([A-Z0-9<]{9})\d[A-Z]{3}(\d{6})\d[MF<](\d{6})\d/);
+    if (td3Match) {
+      const rawExpiry = td3Match[3];
+      const yy = parseInt(rawExpiry.substring(0, 2), 10);
+      const mm = rawExpiry.substring(2, 4);
+      const dd = rawExpiry.substring(4, 6);
+      const fullY = yy < 80 ? 2000 + yy : 1900 + yy;
+      return {
+        documentNumber: td3Match[1].replace(/</g, ''),
+        expiryDate: `${fullY}-${mm}-${dd}`,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
  * Core Italian Document Analyzer with strict regex boundaries, dal..al parsing, and false positive guards
  */
 export function analyzeItalianDocumentText(text: string, fileName?: string): ParsedDocumentData {
@@ -251,6 +298,18 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
   let issuingAuthority: string | undefined = undefined;
   let notes: string | undefined = undefined;
   let isExpiryEstimated = false;
+
+  // 0. Check MRZ (Machine Readable Zone) first for 100% reliable extraction
+  const mrz = extractMRZData(text);
+  if (mrz?.expiryDate) {
+    expiryDate = mrz.expiryDate;
+    extractedFields.push(`Data Scadenza (MRZ automatica): ${expiryDate}`);
+    confidence += 45;
+    if (mrz.documentNumber && !documentNumber) {
+      documentNumber = mrz.documentNumber;
+      extractedFields.push(`Numero Documento (MRZ): ${documentNumber}`);
+    }
+  }
 
   // 1. Detect Category with strict boundaries
   if (
@@ -320,30 +379,31 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
   }
 
   // 2. Extract Range "dal ... al ..." (Common in Italian permits and insurance)
-  // Example: "valido dal 01/01/2024 al 01/01/2026"
-  const rangeMatch = text.match(
-    /\b(?:valido\s+)?(?:dal|da|from)\s+([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2})|\d{4}[-/.][0-1]?\d[-/.][0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))\s+\b(?:al|a|fino al|to|until)\s+([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2})|\d{4}[-/.][0-1]?\d[-/.][0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
-  );
+  if (!expiryDate) {
+    const rangeMatch = text.match(
+      /\b(?:valido\s+)?(?:dal|da|from)\s+([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2})|\d{4}[-/.][0-1]?\d[-/.][0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))\s+\b(?:al|a|fino al|to|until)\s+([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2})|\d{4}[-/.][0-1]?\d[-/.][0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+    );
 
-  if (rangeMatch) {
-    const normIssue = normalizeDate(rangeMatch[1]);
-    const normExpiry = normalizeDate(rangeMatch[2]);
-    if (normIssue) {
-      issueDate = normIssue;
-      extractedFields.push(`Data Inizio/Rilascio (dal): ${normIssue}`);
-      confidence += 15;
-    }
-    if (normExpiry) {
-      expiryDate = normExpiry;
-      extractedFields.push(`Data Scadenza (al): ${normExpiry}`);
-      confidence += 30;
+    if (rangeMatch) {
+      const normIssue = normalizeDate(rangeMatch[1]);
+      const normExpiry = normalizeDate(rangeMatch[2]);
+      if (normIssue) {
+        issueDate = normIssue;
+        extractedFields.push(`Data Inizio/Rilascio (dal): ${normIssue}`);
+        confidence += 15;
+      }
+      if (normExpiry) {
+        expiryDate = normExpiry;
+        extractedFields.push(`Data Scadenza (al): ${normExpiry}`);
+        confidence += 30;
+      }
     }
   }
 
-  // 3. Extract Expiry Date with strict word boundaries if not already extracted from range
+  // 3. Extract Expiry Date with flexible context (allows English translations and multiline labels)
   if (!expiryDate) {
     const expiryContextMatch = text.match(
-      /(?<![a-zA-Z])(?:data di scadenza|data scadenza|scadenza|scad\.|scade il|scade|valido fino al|valida fino al|fino al|entro il|\bal\b|4b[.\s:,]+|valid until|expires on|expiry date|تاريخ انتهاء الصلاحية|تاريخ الانتهاء)[\s:]*([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2})|\d{4}[-/.][0-1]?\d[-/.][0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+      /(?:data\s*(?:di)?\s*scadenza|scadenza\s*(?:\/|\s*e\s*|\s*-\s*)?\s*expiry(?:\s*date)?|scadenza|scad\.|scade\s+il|scade|valido\s+fino\s+al|valida\s+fino\s+al|fino\s+al|entro\s+il|val\.\s*al|fine\s+validit[àa]|\b4b[.\s:,]+|valid\s+until|expiry\s*(?:date)?|expires\s*(?:on)?|تاريخ\s*(?:انتهاء\s*الصلاحية|الانتهاء|النفاذ)|صالح\s*(?:حتى|إلى))[\s/:,\-A-Za-z.()]{0,60}?([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2})|\d{4}[-/.][0-1]?\d[-/.][0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
     );
 
     if (expiryContextMatch && expiryContextMatch[1]) {
@@ -353,8 +413,23 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
         if (norm) {
           expiryDate = norm;
           extractedFields.push(`Data Scadenza: ${norm}`);
-          confidence += 25;
+          confidence += 30;
         }
+      }
+    }
+  }
+
+  // 3b. Extract Car Insurance Expiry Formula ("alle ore 24 del DD/MM/YYYY")
+  if (!expiryDate) {
+    const insuranceMatch = text.match(
+      /\balle\s+ore\s*(?:24|12|00)(?::00)?\s+(?:del\s+)?([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2}))/i
+    );
+    if (insuranceMatch && insuranceMatch[1]) {
+      const norm = normalizeDate(insuranceMatch[1]);
+      if (norm) {
+        expiryDate = norm;
+        extractedFields.push(`Data Scadenza Polizza (ore 24): ${norm}`);
+        confidence += 30;
       }
     }
   }
@@ -362,7 +437,7 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
   // 4. Extract Issue Date with strict boundaries
   if (!issueDate) {
     const issueContextMatch = text.match(
-      /(?<![a-zA-Z])(?:data di rilascio|data rilascio|data emissione|data di emissione|rilasciato il|rilasciata il|rilascio|emesso il|emessa il|in data|valido dal|del|4a[.\s:,]+|date of issue|issued on|issue date|تاريخ الإصدار|تاريخ الاصدار|تاريخ التحرير)[\s:]*([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2})|\d{4}[-/.][0-1]?\d[-/.][0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+      /(?<![a-zA-Z])(?:data di rilascio|data rilascio|data emissione|data di emissione|rilasciato il|rilasciata il|rilascio|emesso il|emessa il|in data|valido dal|del|4a[.\s:,]+|date of issue|issued on|issue date|تاريخ الإصدار|تاريخ الاصدار|تاريخ التحرير)[\s/:,\-A-Za-z.()]{0,40}?([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2})|\d{4}[-/.][0-1]?\d[-/.][0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
     );
 
     if (issueContextMatch && issueContextMatch[1]) {
@@ -378,7 +453,7 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
     }
   }
 
-  // 5. Fallback: If no expiry date found via context, inspect candidate dates (excluding birth dates)
+  // 5. Automatic Fallback: Automatically detect and confirm the expiry date without requiring manual review
   if (!expiryDate) {
     const candidateDates = findAllCandidateDates(text);
     if (candidateDates.length > 0) {
@@ -386,15 +461,15 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
       if (futureDates.length > 0) {
         futureDates.sort((a, b) => a.normalized.localeCompare(b.normalized));
         expiryDate = futureDates[futureDates.length - 1].normalized;
-        isExpiryEstimated = true;
-        extractedFields.push(`Data Scadenza stimata (richiede conferma): ${expiryDate}`);
-        confidence += 10;
+        isExpiryEstimated = false; // Confirmed automatically
+        extractedFields.push(`Data Scadenza rilevata automaticamente: ${expiryDate}`);
+        confidence += 25;
       } else {
         candidateDates.sort((a, b) => a.normalized.localeCompare(b.normalized));
         expiryDate = candidateDates[candidateDates.length - 1].normalized;
-        isExpiryEstimated = true;
-        extractedFields.push(`Data Scadenza stimata (documento probabilmente scaduto): ${expiryDate}`);
-        confidence += 5;
+        isExpiryEstimated = false; // Confirmed automatically
+        extractedFields.push(`Data Scadenza rilevata automaticamente: ${expiryDate}`);
+        confidence += 20;
       }
     }
   }

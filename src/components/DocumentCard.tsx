@@ -123,16 +123,7 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
             <span>{formatRelativeDays(days, lang)}</span>
           </div>
 
-          {doc.needsReview && (
-            <button
-              onClick={() => onEdit(doc)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-[11px] font-bold hover:bg-amber-100 transition-colors"
-              title={lang === 'ar' ? 'انقر لتأكيد أو تعديل التاريخ' : 'Clicca per confermare o modificare la data'}
-            >
-              <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
-              <span>{lang === 'ar' ? 'تأكيد التاريخ' : 'Verifica data'}</span>
-            </button>
-          )}
+
         </div>
 
         {/* Document Details Grid */}
