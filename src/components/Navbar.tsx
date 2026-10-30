@@ -12,7 +12,10 @@ import {
   Bell, 
   Sparkles,
   Mail,
-  MessageSquare
+  MessageSquare,
+  ShieldCheck,
+  Lock,
+  CalendarRange
 } from 'lucide-react';
 import { Language } from '../types';
 import { translations } from '../translations';
@@ -25,6 +28,11 @@ interface NavbarProps {
   onOpenAddModal: () => void;
   onOpenGuide: () => void;
   onOpenCalendar: () => void;
+  onOpenCalendarView: () => void;
+  onOpenAuditLog: () => void;
+  onOpenAppLock: () => void;
+  onLockNow: () => void;
+  isLockEnabled: boolean;
   onOpenEmailAlerts: () => void;
   onOpenWhatsAppAlerts: () => void;
   onOpenNameSuggestions: () => void;
@@ -42,6 +50,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAddModal,
   onOpenGuide,
   onOpenCalendar,
+  onOpenCalendarView,
+  onOpenAuditLog,
+  onOpenAppLock,
+  onLockNow,
+  isLockEnabled,
   onOpenEmailAlerts,
   onOpenWhatsAppAlerts,
   onOpenNameSuggestions,
@@ -119,15 +132,46 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="hidden xl:inline">{lang === 'ar' ? 'واتساب' : 'WhatsApp'}</span>
             </button>
 
-            {/* Wallpaper Modal Trigger */}
+            {/* Calendar Expiry Visualizer */}
             <button
-              onClick={onOpenWallpaper}
+              onClick={onOpenCalendarView}
               className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
-              title={lang === 'ar' ? 'خلفية التطبيق للشاشة' : 'Sfondo per smartphone'}
+              title={lang === 'ar' ? 'تقويم انتهاء الوثائق الشهري' : 'Calendario Scadenze Mensile'}
             >
-              <Sparkles className="w-4 h-4 text-emerald-500" />
-              <span className="hidden xl:inline">{lang === 'ar' ? 'خلفية الجوال' : 'Sfondo'}</span>
+              <CalendarRange className="w-4 h-4 text-sky-500" />
+              <span className="hidden xl:inline">{lang === 'ar' ? 'التقويم' : 'Calendario'}</span>
             </button>
+
+            {/* Audit Log (سجل العمليات) */}
+            <button
+              onClick={onOpenAuditLog}
+              className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
+              title={lang === 'ar' ? 'سجل العمليات والأمان' : 'Registro Attività & Sicurezza'}
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span className="hidden xl:inline">{lang === 'ar' ? 'السجل' : 'Audit'}</span>
+            </button>
+
+            {/* App Lock Settings & Lock Now */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 sm:p-1 rounded-xl">
+              <button
+                onClick={onOpenAppLock}
+                className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition-all flex items-center gap-1 text-xs font-semibold"
+                title={lang === 'ar' ? 'إعدادات قفل التطبيق (PIN / Face ID)' : 'Impostazioni Blocco App (PIN / Biometria)'}
+              >
+                <Lock className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isLockEnabled ? 'text-amber-500' : 'text-slate-400'}`} />
+                <span className="hidden 2xl:inline text-[11px]">{isLockEnabled ? (lang === 'ar' ? 'محمي' : 'Protetto') : (lang === 'ar' ? 'قفل' : 'Blocco')}</span>
+              </button>
+              {isLockEnabled && (
+                <button
+                  onClick={onLockNow}
+                  className="px-1.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold shadow-xs transition-colors"
+                  title={lang === 'ar' ? 'قفل الشاشة الآن' : 'Blocca adesso'}
+                >
+                  {lang === 'ar' ? 'قفل' : 'Lock'}
+                </button>
+              )}
+            </div>
 
             {/* Backup / Export / Import */}
             <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 sm:p-1 rounded-xl">

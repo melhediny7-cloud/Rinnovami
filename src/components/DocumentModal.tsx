@@ -10,19 +10,26 @@ import {
   ChevronDown, 
   ChevronUp, 
   ScanLine,
-  AlertTriangle
+  AlertTriangle,
+  AlertOctagon,
+  ShieldCheck
 } from 'lucide-react';
 import { DocumentCategory, DocumentItem, Language } from '../types';
 import { translations } from '../translations';
 import { runItalianOCR } from '../utils/ocrService';
 import { ParsedDocumentData } from '../utils/italianDocParser';
 import { compressImageFile } from '../utils/imageCompressor';
+import { getDaysRemaining } from '../utils/dateUtils';
+import { encryptDocumentData } from '../utils/cryptoService';
+import { logActivity } from '../utils/auditLogger';
+import { DuplicateCheckModal } from './DuplicateCheckModal';
 
 interface DocumentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (doc: DocumentItem) => void;
   documentToEdit?: DocumentItem | null;
+  existingDocuments?: DocumentItem[];
   lang: Language;
 }
 
@@ -31,6 +38,7 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
   onClose,
   onSave,
   documentToEdit,
+  existingDocuments = [],
   lang,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,6 +59,12 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
   const [fileName, setFileName] = useState<string | undefined>(undefined);
   const [fileType, setFileType] = useState<string | undefined>(undefined);
   const [fileSize, setFileSize] = useState<number | undefined>(undefined);
+  const [isEncrypted, setIsEncrypted] = useState(true);
+
+  // Duplicate Check Modal State
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [duplicateCandidate, setDuplicateCandidate] = useState<DocumentItem | null>(null);
+  const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
 
   // OCR state
   const [isScanning, setIsScanning] = useState(false);
@@ -83,8 +97,10 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
       setFileName(documentToEdit.fileName);
       setFileType(documentToEdit.fileType);
       setFileSize(documentToEdit.fileSize);
+      setIsEncrypted(!!documentToEdit.isEncrypted);
       setParsedResult(null);
       setIsDateEstimated(false);
+      setReplaceTargetId(null);
     } else {
       setTitle('');
       setCategory('permesso_soggiorno');
@@ -99,8 +115,10 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
       setFileName(undefined);
       setFileType(undefined);
       setFileSize(undefined);
+      setIsEncrypted(true);
       setParsedResult(null);
       setIsDateEstimated(false);
+      setReplaceTargetId(null);
     }
     setErrors({});
     setIsScanning(false);
@@ -109,6 +127,14 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
 
   if (!isOpen) return null;
   const t = translations[lang];
+
+  const checkForDuplicate = (file: File) => {
+    if (!existingDocuments || existingDocuments.length === 0) return null;
+    return existingDocuments.find((doc) => {
+      if (documentToEdit && doc.id === documentToEdit.id) return false;
+      return doc.fileName && doc.fileName.toLowerCase() === file.name.toLowerCase() && doc.fileSize === file.size;
+    });
+  };
 
   const applyParsedData = (data: ParsedDocumentData) => {
     if (!isMountedRef.current) return;
@@ -125,11 +151,34 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
       setIsDateEstimated(!!data.isExpiryEstimated);
     }
     if (data.issuingAuthority) setIssuingAuthority(data.issuingAuthority);
+
+    // Check for duplicate by document number
+    if (data.documentNumber && existingDocuments.length > 0) {
+      const docNumMatch = existingDocuments.find((d) => {
+        if (documentToEdit && d.id === documentToEdit.id) return false;
+        return (
+          d.documentNumber &&
+          d.documentNumber.toLowerCase() === data.documentNumber?.toLowerCase() &&
+          d.category === (data.category || category)
+        );
+      });
+      if (docNumMatch && !duplicateModalOpen) {
+        setDuplicateCandidate(docNumMatch);
+        setDuplicateModalOpen(true);
+      }
+    }
   };
 
   const handleFileUpload = async (file: File) => {
     setFileName(file.name);
     setFileType(file.type);
+
+    // Check duplicate by file signature
+    const dup = checkForDuplicate(file);
+    if (dup) {
+      setDuplicateCandidate(dup);
+      setDuplicateModalOpen(true);
+    }
 
     try {
       // 1. Compress image to max 1600px and 0.8 JPEG quality before storing!
@@ -186,7 +235,7 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
@@ -202,8 +251,16 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
       return;
     }
 
+    // Encrypt fileData if encryption is active and payload is not already encrypted
+    let finalFileData = fileData;
+    if (isEncrypted && fileData && !fileData.startsWith('ENC_V1:')) {
+      finalFileData = await encryptDocumentData(fileData);
+    }
+
+    const docId = replaceTargetId || (documentToEdit ? documentToEdit.id : `doc-${Date.now()}`);
+
     const doc: DocumentItem = {
-      id: documentToEdit ? documentToEdit.id : `doc-${Date.now()}`,
+      id: docId,
       title: title.trim(),
       category,
       documentNumber: documentNumber.trim(),
@@ -213,23 +270,35 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
       issuingAuthority: issuingAuthority.trim() || undefined,
       reminderDaysBefore: Number(reminderDaysBefore),
       notes: notes.trim() || undefined,
-      fileData,
+      fileData: finalFileData,
       fileName,
       fileType,
       fileSize,
-      isDemo: false, // User created document is never demo
+      isEncrypted,
+      isDemo: false,
       createdAt: documentToEdit ? documentToEdit.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    // Audit Log
+    logActivity(
+      documentToEdit || replaceTargetId ? 'edit' : 'upload',
+      doc.title,
+      `Scadenza: ${doc.expiryDate} • ${doc.holderName || ''}`,
+      doc.id
+    );
 
     onSave(doc);
     onClose();
   };
 
   const categories = Object.keys(t.categories) as DocumentCategory[];
+  const daysRemaining = expiryDate ? getDaysRemaining(expiryDate) : 0;
+  const isAlreadyExpired = expiryDate && daysRemaining < 0;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
+    <>
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
       <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         
         {/* Header */}
@@ -513,6 +582,18 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
             </div>
           </div>
 
+          {/* Expired Document Alert Banner upon upload */}
+          {isAlreadyExpired && (
+            <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs sm:text-sm font-semibold flex items-center gap-2.5 animate-in fade-in shadow-sm">
+              <AlertOctagon className="w-5 h-5 text-rose-600 shrink-0" />
+              <span>
+                {lang === 'ar'
+                  ? `هذه الوثيقة منتهية منذ ${Math.abs(daysRemaining)} يوم، ويُفضل بدء إجراءات التجديد فورًا.`
+                  : `Questo documento è scaduto da ${Math.abs(daysRemaining)} giorni. Si consiglia di avviare immediatamente la procedura di rinnovo.`}
+              </span>
+            </div>
+          )}
+
           {/* Issuing Authority & Reminder Threshold */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -544,6 +625,32 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
                 <option value={180}>180 {t.modal.days} (6 أشهر قبل / 6 mesi prima)</option>
               </select>
             </div>
+          </div>
+
+          {/* AES-256 Encryption Toggle */}
+          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  {lang === 'ar' ? 'تشفير المستند (AES-256 GCM)' : 'Crittografia Documento (AES-256)'}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  {lang === 'ar' ? 'تشفير أمان محلي قبل التخزين والمشاركة' : 'Protezione crittografica locale durante la memorizzazione'}
+                </p>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isEncrypted}
+                onChange={(e) => setIsEncrypted(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
           </div>
 
           {/* Notes */}
@@ -579,5 +686,29 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
         </form>
       </div>
     </div>
+
+    {/* Duplicate Check Modal */}
+    <DuplicateCheckModal
+      isOpen={duplicateModalOpen}
+      existingDoc={duplicateCandidate}
+      newDocData={{ title, fileName, expiryDate, category }}
+      lang={lang}
+      onReplace={() => {
+        if (duplicateCandidate) {
+          setReplaceTargetId(duplicateCandidate.id);
+        }
+        setDuplicateModalOpen(false);
+      }}
+      onKeepBoth={() => {
+        setTitle((prev) => `${prev} (${lang === 'ar' ? 'نسخة 2' : 'Copia 2'})`);
+        setReplaceTargetId(null);
+        setDuplicateModalOpen(false);
+      }}
+      onCancel={() => {
+        setDuplicateModalOpen(false);
+        removeFile();
+      }}
+    />
+  </>
   );
 };

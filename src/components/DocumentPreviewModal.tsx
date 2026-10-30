@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Download, FileText, AlertTriangle } from 'lucide-react';
+import { X, Download, FileText, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { DocumentItem, Language } from '../types';
 import { translations } from '../translations';
 import { isValidDataUrl } from '../utils/imageCompressor';
+import { decryptDocumentData } from '../utils/cryptoService';
+import { logActivity } from '../utils/auditLogger';
 
 interface DocumentPreviewModalProps {
   isOpen: boolean;
@@ -30,32 +32,58 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
   lang,
 }) => {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [decryptedData, setDecryptedData] = useState<string | null>(null);
 
   useEffect(() => {
-    if (doc?.fileData && isValidDataUrl(doc.fileData)) {
-      if (doc.fileType === 'application/pdf' || doc.fileData.startsWith('data:application/pdf')) {
+    if (isOpen && doc?.fileData) {
+      // Log activity
+      logActivity('view', doc.title, `Aperto file: ${doc.fileName || 'allegato'}`, doc.id);
+
+      // Decrypt if encrypted package
+      if (doc.fileData.startsWith('ENC_V1:')) {
+        decryptDocumentData(doc.fileData).then((decrypted) => {
+          setDecryptedData(decrypted);
+          setupBlob(decrypted, doc.fileType);
+        });
+      } else {
+        setDecryptedData(doc.fileData);
+        setupBlob(doc.fileData, doc.fileType);
+      }
+    } else {
+      setDecryptedData(null);
+      setBlobUrl(null);
+    }
+  }, [doc, isOpen]);
+
+  const setupBlob = (data: string, fileType?: string) => {
+    if (data && isValidDataUrl(data)) {
+      if (fileType === 'application/pdf' || data.startsWith('data:application/pdf')) {
         try {
-          const blob = base64ToBlob(doc.fileData, 'application/pdf');
+          const blob = base64ToBlob(data, 'application/pdf');
           const url = URL.createObjectURL(blob);
           setBlobUrl(url);
-          return () => {
-            URL.revokeObjectURL(url);
-          };
         } catch (e) {
           console.error('Error creating PDF blob URL:', e);
           setBlobUrl(null);
         }
       }
     }
-    setBlobUrl(null);
-  }, [doc, isOpen]);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [blobUrl]);
 
   if (!isOpen || !doc || !doc.fileData) return null;
   const t = translations[lang];
 
-  // Validate security of data URL
-  const isSafe = isValidDataUrl(doc.fileData);
-  if (!isSafe) {
+  const activeData = decryptedData || doc.fileData;
+  const isSafe = isValidDataUrl(activeData);
+  if (!isSafe && !doc.fileData.startsWith('ENC_V1:')) {
     return (
       <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl max-w-md text-center space-y-3">
@@ -70,7 +98,7 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
     );
   }
 
-  const isImage = doc.fileType?.startsWith('image/') || doc.fileData.startsWith('data:image/');
+  const isImage = doc.fileType?.startsWith('image/') || activeData.startsWith('data:image/');
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
@@ -92,9 +120,17 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
             </div>
           </div>
 
+          {/* Security Badge if Encrypted */}
+          {doc.isEncrypted && (
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold me-2">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>{lang === 'ar' ? 'مشفّر AES-256' : 'Protetto AES-256'}</span>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <a
-              href={blobUrl || doc.fileData}
+              href={blobUrl || activeData}
               download={doc.fileName || `${doc.title}.${isImage ? 'jpg' : 'pdf'}`}
               className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
               title="Download file"
@@ -114,13 +150,13 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
         <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-100 dark:bg-slate-950">
           {isImage ? (
             <img
-              src={doc.fileData}
+              src={activeData}
               alt={doc.title}
               className="max-h-[70vh] max-w-full rounded-2xl object-contain shadow-lg"
             />
           ) : (
             <iframe
-              src={blobUrl || doc.fileData}
+              src={blobUrl || activeData}
               title={doc.title}
               className="w-full h-[70vh] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white"
             />

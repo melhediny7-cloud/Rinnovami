@@ -11,7 +11,7 @@ export type DocumentCategory =
   | 'certificato'
   | 'altro';
 
-export type DocumentStatus = 'valid' | 'expiring_soon' | 'critical' | 'expired';
+export type DocumentStatus = 'valid' | 'expiring_soon' | 'critical' | 'expired' | 'review';
 
 export interface DocumentItem {
   id: string;
@@ -28,10 +28,30 @@ export interface DocumentItem {
   fileName?: string;
   fileType?: string;
   fileSize?: number;
+  fileHash?: string;
+  isEncrypted?: boolean;
   isDemo?: boolean;
   needsReview?: boolean; // Flagged when document was auto-imported and needs date verification
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ActivityLogItem {
+  id: string;
+  action: 'upload' | 'edit' | 'view' | 'delete' | 'renew' | 'export';
+  documentTitle: string;
+  documentId?: string;
+  timestamp: string; // ISO string
+  details?: string;
+  user?: string;
+}
+
+export interface AppLockSettings {
+  isEnabled: boolean;
+  pin?: string;
+  useBiometrics?: boolean;
+  autoLockMinutes: number; // e.g. 5, 15, 30
+  lastUnlockedTimestamp?: number;
 }
 
 export type Language = 'ar' | 'it';

@@ -26,18 +26,23 @@ export function getDaysRemaining(expiryDateStr: string): number {
 }
 
 /**
- * Compute document status dynamically ensuring all states (critical, expiring soon, valid)
- * are properly accessible even when reminder days is 15.
+ * Compute document status based on smart color palette:
+ * - review (Purple / بنفسجي): Needs review / verification flag set
+ * - expired (Red / أحمر): Expired (< 0 days)
+ * - critical (Orange / برتقالي): Expiring within 30 days (0 to 30 days)
+ * - expiring_soon (Yellow / أصفر): Expiring within 90 days (31 to 90 days)
+ * - valid (Green / أخضر): Valid (> 90 days)
  */
-export function computeDocumentStatus(expiryDateStr: string, reminderDays: number = 60): DocumentStatus {
+export function computeDocumentStatus(
+  expiryDateStr: string,
+  _reminderDays: number = 60,
+  needsReview: boolean = false
+): DocumentStatus {
+  if (needsReview) return 'review';
   const days = getDaysRemaining(expiryDateStr);
   if (days < 0) return 'expired';
-
-  // Critical threshold: if user set reminder to 15 days, critical is <= 5 days; otherwise <= 15 days
-  const criticalThreshold = reminderDays <= 15 ? Math.max(1, Math.floor(reminderDays / 3)) : 15;
-
-  if (days <= criticalThreshold) return 'critical';
-  if (days <= reminderDays) return 'expiring_soon';
+  if (days <= 30) return 'critical';
+  if (days <= 90) return 'expiring_soon';
   return 'valid';
 }
 

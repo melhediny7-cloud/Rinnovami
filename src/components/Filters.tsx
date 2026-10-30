@@ -82,17 +82,18 @@ export const Filters: React.FC<FiltersProps> = ({
             ))}
           </select>
 
-          {/* Status Selector */}
+          {/* Status Selector with Smart Color Palette */}
           <select
             value={selectedStatus}
             onChange={(e) => onStatusChange(e.target.value as DocumentStatus | 'all')}
             className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
           >
             <option value="all">{t.filter.allStatuses}</option>
-            <option value="expired">🔴 {t.status.expired}</option>
-            <option value="critical">🟠 {t.status.critical}</option>
-            <option value="expiring_soon">🟡 {t.status.expiring_soon}</option>
-            <option value="valid">🟢 {t.status.valid}</option>
+            <option value="valid">🟢 {lang === 'ar' ? 'ساري (> 90 يوم)' : 'Valido (> 90 gg)'}</option>
+            <option value="expiring_soon">🟡 {lang === 'ar' ? 'ينتهي خلال 90 يومًا' : 'Entro 90 giorni'}</option>
+            <option value="critical">🟠 {lang === 'ar' ? 'ينتهي خلال 30 يومًا' : 'Entro 30 giorni'}</option>
+            <option value="expired">🔴 {lang === 'ar' ? 'منتهي الصلاحية' : 'Scaduto'}</option>
+            <option value="review">🟣 {lang === 'ar' ? 'يحتاج مراجعة وتأكيد' : 'Da verificare'}</option>
           </select>
 
           {/* Sort Selector */}

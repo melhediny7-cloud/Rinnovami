@@ -43,37 +43,49 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
 }) => {
   const t = translations[lang];
   const days = getDaysRemaining(doc.expiryDate);
-  const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore);
+  const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore, doc.needsReview);
 
-  // Status configuration
+  // Smart Color Palette requested by user:
+  // Green: Valid (> 90 days)
+  // Yellow: Expiring within 90 days (31 - 90 days)
+  // Orange: Expiring within 30 days (1 - 30 days)
+  // Red: Expired (<= 0 days)
+  // Purple: Needs Review
   const statusConfig = {
-    expired: {
-      label: t.status.expired,
-      badgeBg: 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 border-rose-200 dark:border-rose-900',
-      countdownBg: 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
-      icon: AlertOctagon,
-      borderTop: 'border-t-4 border-t-rose-500',
-    },
-    critical: {
-      label: t.status.critical,
-      badgeBg: 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border-amber-200 dark:border-amber-900',
-      countdownBg: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
-      icon: AlertTriangle,
-      borderTop: 'border-t-4 border-t-amber-500',
-    },
-    expiring_soon: {
-      label: t.status.expiring_soon,
-      badgeBg: 'bg-blue-100 text-blue-800 dark:bg-blue-950/70 dark:text-blue-300 border-blue-200 dark:border-blue-900',
-      countdownBg: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
-      icon: Clock,
-      borderTop: 'border-t-4 border-t-blue-500',
-    },
     valid: {
-      label: t.status.valid,
-      badgeBg: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+      label: lang === 'ar' ? 'ساري (> 90 يوم)' : 'Valido (> 90 gg)',
+      badgeBg: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
       countdownBg: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
       icon: CheckCircle2,
       borderTop: 'border-t-4 border-t-emerald-500',
+    },
+    expiring_soon: {
+      label: lang === 'ar' ? 'ينتهي خلال 90 يومًا' : 'Scade entro 90 gg',
+      badgeBg: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/70 dark:text-yellow-300 border-yellow-300 dark:border-yellow-800',
+      countdownBg: 'bg-yellow-50 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300',
+      icon: Clock,
+      borderTop: 'border-t-4 border-t-yellow-400',
+    },
+    critical: {
+      label: lang === 'ar' ? 'ينتهي خلال 30 يومًا' : 'Scade entro 30 gg',
+      badgeBg: 'bg-orange-100 text-orange-800 dark:bg-orange-950/70 dark:text-orange-300 border-orange-300 dark:border-orange-800',
+      countdownBg: 'bg-orange-50 text-orange-800 dark:bg-orange-950/40 dark:text-orange-300',
+      icon: AlertTriangle,
+      borderTop: 'border-t-4 border-t-orange-500',
+    },
+    expired: {
+      label: lang === 'ar' ? 'منتهي الصلاحية' : 'Scaduto',
+      badgeBg: 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 border-rose-300 dark:border-rose-900',
+      countdownBg: 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
+      icon: AlertOctagon,
+      borderTop: 'border-t-4 border-t-rose-600',
+    },
+    review: {
+      label: lang === 'ar' ? 'يحتاج مراجعة وتأكيد' : 'Richiede verifica',
+      badgeBg: 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-300 border-purple-300 dark:border-purple-800',
+      countdownBg: 'bg-purple-50 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300',
+      icon: AlertTriangle,
+      borderTop: 'border-t-4 border-t-purple-600',
     },
   }[status];
 

@@ -23,10 +23,12 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
   let critical = 0;
   let expiringSoon = 0;
   let valid = 0;
+  let review = 0;
 
   documents.forEach((doc) => {
-    const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore);
-    if (status === 'expired') expired++;
+    const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore, doc.needsReview);
+    if (status === 'review') review++;
+    else if (status === 'expired') expired++;
     else if (status === 'critical') critical++;
     else if (status === 'expiring_soon') expiringSoon++;
     else valid++;
@@ -38,62 +40,72 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
       label: t.stats.total,
       count: documents.length,
       icon: Layers,
-      color: 'slate',
       bgGrad: 'from-slate-500/10 to-slate-600/5',
       activeRing: 'ring-slate-400 dark:ring-slate-500',
-      textColor: 'text-slate-700 dark:text-slate-200',
+      textColor: 'text-slate-800 dark:text-slate-100',
       iconColor: 'text-slate-600 dark:text-slate-300',
     },
     {
-      id: 'expired' as const,
-      label: t.stats.expired,
-      count: expired,
-      icon: AlertOctagon,
-      color: 'rose',
-      bgGrad: 'from-rose-500/10 to-red-600/5',
-      activeRing: 'ring-rose-500 dark:ring-rose-400',
-      textColor: 'text-rose-700 dark:text-rose-300',
-      iconColor: 'text-rose-600 dark:text-rose-400',
-      pulse: expired > 0,
-    },
-    {
-      id: 'critical' as const,
-      label: t.stats.critical,
-      count: critical,
-      icon: AlertTriangle,
-      color: 'amber',
-      bgGrad: 'from-amber-500/10 to-orange-600/5',
-      activeRing: 'ring-amber-500 dark:ring-amber-400',
-      textColor: 'text-amber-700 dark:text-amber-300',
-      iconColor: 'text-amber-600 dark:text-amber-400',
-      pulse: critical > 0,
-    },
-    {
-      id: 'expiring_soon' as const,
-      label: t.stats.expiringSoon,
-      count: expiringSoon,
-      icon: Clock,
-      color: 'blue',
-      bgGrad: 'from-blue-500/10 to-indigo-600/5',
-      activeRing: 'ring-blue-500 dark:ring-blue-400',
-      textColor: 'text-blue-700 dark:text-blue-300',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-    },
-    {
       id: 'valid' as const,
-      label: t.stats.valid,
+      label: lang === 'ar' ? 'ساري (> 90 يوم)' : 'Valido (> 90 gg)',
       count: valid,
       icon: CheckCircle2,
-      color: 'emerald',
       bgGrad: 'from-emerald-500/10 to-teal-600/5',
       activeRing: 'ring-emerald-500 dark:ring-emerald-400',
       textColor: 'text-emerald-700 dark:text-emerald-300',
       iconColor: 'text-emerald-600 dark:text-emerald-400',
     },
+    {
+      id: 'expiring_soon' as const,
+      label: lang === 'ar' ? 'ينتهي خلال 90 يومًا' : 'Entro 90 giorni',
+      count: expiringSoon,
+      icon: Clock,
+      bgGrad: 'from-yellow-500/15 to-amber-600/10',
+      activeRing: 'ring-yellow-400 dark:ring-yellow-400',
+      textColor: 'text-yellow-800 dark:text-yellow-300',
+      iconColor: 'text-yellow-600 dark:text-yellow-400',
+    },
+    {
+      id: 'critical' as const,
+      label: lang === 'ar' ? 'ينتهي خلال 30 يومًا' : 'Entro 30 giorni',
+      count: critical,
+      icon: AlertTriangle,
+      bgGrad: 'from-orange-500/15 to-amber-600/10',
+      activeRing: 'ring-orange-500 dark:ring-orange-400',
+      textColor: 'text-orange-700 dark:text-orange-300',
+      iconColor: 'text-orange-600 dark:text-orange-400',
+      pulse: critical > 0,
+    },
+    {
+      id: 'expired' as const,
+      label: lang === 'ar' ? 'منتهي الصلاحية' : 'Scaduto',
+      count: expired,
+      icon: AlertOctagon,
+      bgGrad: 'from-rose-500/15 to-red-600/10',
+      activeRing: 'ring-rose-500 dark:ring-rose-400',
+      textColor: 'text-rose-700 dark:text-rose-300',
+      iconColor: 'text-rose-600 dark:text-rose-400',
+      pulse: expired > 0,
+    },
+    ...(review > 0
+      ? [
+          {
+            id: 'review' as const,
+            label: lang === 'ar' ? 'يحتاج مراجعة' : 'Da verificare',
+            count: review,
+            icon: AlertTriangle,
+            bgGrad: 'from-purple-500/15 to-indigo-600/10',
+            activeRing: 'ring-purple-500 dark:ring-purple-400',
+            textColor: 'text-purple-700 dark:text-purple-300',
+            iconColor: 'text-purple-600 dark:text-purple-400',
+            pulse: true,
+          },
+        ]
+      : []),
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-4 my-4 sm:my-6">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-4 my-4 sm:my-6">
       {cards.map((c) => {
         const Icon = c.icon;
         const isSelected = selectedStatus === c.id;
