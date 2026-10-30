@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, ArrowLeft, ArrowRight, Volume2, ShieldAlert } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, Volume2, ShieldAlert, Sparkles, Send } from 'lucide-react';
 import { DocumentItem, Language } from '../types';
 import { translations } from '../translations';
 import { computeDocumentStatus } from '../utils/dateUtils';
@@ -9,12 +9,14 @@ interface AlertBannerProps {
   documents: DocumentItem[];
   lang: Language;
   onFilterUrgent: () => void;
+  onForceAutoAlert?: () => void;
 }
 
 export const AlertBanner: React.FC<AlertBannerProps> = ({
   documents,
   lang,
   onFilterUrgent,
+  onForceAutoAlert,
 }) => {
   const t = translations[lang];
 
@@ -65,16 +67,37 @@ export const AlertBanner: React.FC<AlertBannerProps> = ({
                 </span>
               )}
             </p>
+            <div className="flex items-center gap-2 mt-1.5 text-[11px] text-white/80 font-medium">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-300 animate-ping" />
+              <span>
+                {lang === 'ar'
+                  ? 'المراقبة الذكية الذاتية نشطة (يرسل تنبيهات تلقائية لبريدك الإلكتروني)'
+                  : 'Monitoraggio smart attivo: invio automatico notifiche email in corso'}
+              </span>
+            </div>
           </div>
         </div>
 
-        <button
-          onClick={onFilterUrgent}
-          className="self-end sm:self-center shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-white text-rose-700 hover:bg-rose-50 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all hover:scale-105 active:scale-95"
-        >
-          <span>{lang === 'ar' ? 'عرض الوثائق العاجلة' : 'Visualizza Documenti Urgenti'}</span>
-          <ArrowIcon className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+          {onForceAutoAlert && (
+            <button
+              onClick={onForceAutoAlert}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-xs font-bold transition-all border border-white/25 hover:scale-105 active:scale-95"
+              title={lang === 'ar' ? 'فحص وإرسال تنبيه آلي الآن' : 'Invia notifica automatica adesso'}
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>{lang === 'ar' ? 'تنبيه آلي الآن ⚡' : 'Invia Alert ⚡'}</span>
+            </button>
+          )}
+
+          <button
+            onClick={onFilterUrgent}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-rose-700 hover:bg-rose-50 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all hover:scale-105 active:scale-95"
+          >
+            <span>{lang === 'ar' ? 'عرض الوثائق' : 'Visualizza'}</span>
+            <ArrowIcon className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

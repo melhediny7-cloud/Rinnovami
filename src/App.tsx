@@ -43,6 +43,7 @@ import { AppLockModal } from './components/AppLockModal';
 import { AppLockScreen } from './components/AppLockScreen';
 import { isCurrentlyLocked, lockAppImmediately, loadLockSettings } from './utils/appLockService';
 import { logActivity } from './utils/auditLogger';
+import { checkAndDispatchAutonomousAlerts } from './utils/autonomousNotifier';
 
 export const App: React.FC = () => {
   // Localization & Theme with backwards compatibility migration
@@ -158,6 +159,50 @@ export const App: React.FC = () => {
       });
     }
   }, [documents, isLoadingDocs]);
+
+  // Autonomous Monitoring Engine: automatically detects expiring documents on startup & sends alerts
+  useEffect(() => {
+    if (!isLoadingDocs && documents.length > 0) {
+      const timer = setTimeout(() => {
+        checkAndDispatchAutonomousAlerts(documents, lang, false).then((res) => {
+          if (res.triggered) {
+            showToast(res.message);
+            playAlertSound();
+          }
+        });
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoadingDocs, documents.length, lang]);
+
+  // Periodic autonomous check every 60 minutes while app is running
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (documents.length > 0) {
+        checkAndDispatchAutonomousAlerts(documents, lang, false).then((res) => {
+          if (res.triggered) {
+            showToast(res.message);
+          }
+        });
+      }
+    }, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [documents, lang]);
+
+  // Re-check automatically whenever user returns to the tab or unminimizes browser
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && documents.length > 0) {
+        checkAndDispatchAutonomousAlerts(documents, lang, false).then((res) => {
+          if (res.triggered) {
+            showToast(res.message);
+          }
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [documents, lang]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -537,6 +582,14 @@ export const App: React.FC = () => {
               documents={documents}
               lang={lang}
               onFilterUrgent={() => setSelectedStatus('critical')}
+              onForceAutoAlert={async () => {
+                showToast(lang === 'ar' ? 'جارٍ الفحص الذاتي وإرسال التنبيه التلقائي...' : 'Controllo smart e invio in corso...');
+                const res = await checkAndDispatchAutonomousAlerts(documents, lang, true);
+                showToast(res.message);
+                if (res.triggered) {
+                  playAlertSound();
+                }
+              }}
             />
           </div>
 

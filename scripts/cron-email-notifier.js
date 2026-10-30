@@ -79,7 +79,35 @@ async function run() {
     emailBody += `• ${d.title}\n  Numero: ${d.number}\n  Intestatario: ${d.holder}\n  Scadenza: ${d.expiryDate} (${d.isExpired ? `Scaduto da ${Math.abs(d.daysRemaining)} gg` : `Mancano ${d.daysRemaining} gg`})\n\n`;
   });
 
-  // If RESEND_API_KEY is available, send real email via Resend API
+  // Dispatch directly to Zapier Webhook
+  const ZAPIER_WEBHOOK = process.env.ZAPIER_WEBHOOK_URL || 'https://hooks.zapier.com/hooks/catch/29297098/49i2beh/';
+  console.log(`Dispatching alert to Zapier Webhook (${ZAPIER_WEBHOOK})...`);
+  try {
+    const payload = JSON.stringify({
+      title: urgent[0].title,
+      documentTitle: urgent[0].title,
+      expiryDate: urgent[0].expiryDate,
+      daysRemaining: urgent[0].daysRemaining,
+      holderName: urgent[0].holder,
+      documentNumber: urgent[0].number,
+      recipient: RECIPIENT_EMAIL,
+      subject: emailSubject,
+      message: emailBody,
+      text: emailBody,
+      urgentCount: urgent.length,
+      timestamp: new Date().toISOString()
+    });
+    const res = await fetch(ZAPIER_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+    console.log('Zapier Webhook response:', res.status, await res.text());
+  } catch (err) {
+    console.error('Failed to dispatch to Zapier:', err.message);
+  }
+
+  // If RESEND_API_KEY is available, also send real email via Resend API
   if (RESEND_API_KEY) {
     console.log(`Dispatching email to ${RECIPIENT_EMAIL} via Resend...`);
     try {
