@@ -10,16 +10,17 @@ export function getTodayOffset(daysOffset: number): string {
 }
 
 /**
- * Calculates days remaining using UTC midnight timestamps to eliminate DST (Daylight Saving Time) 1-hour shifts
+ * Calculates days remaining using UTC midnight timestamps to eliminate DST shifts.
+ * Returns 999999 for permanent / no-expiry documents so they sort naturally at the end.
  */
-export function getDaysRemaining(expiryDateStr: string): number {
-  if (!expiryDateStr) return 0;
+export function getDaysRemaining(expiryDateStr?: string): number {
+  if (!expiryDateStr) return 999999;
 
   const today = new Date();
   const utcToday = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
 
   const [year, month, day] = expiryDateStr.split('-').map(Number);
-  if (!year || !month || !day) return 0;
+  if (!year || !month || !day) return 999999;
 
   const utcExpiry = Date.UTC(year, month - 1, day);
   return Math.round((utcExpiry - utcToday) / (1000 * 60 * 60 * 24));
@@ -27,18 +28,20 @@ export function getDaysRemaining(expiryDateStr: string): number {
 
 /**
  * Compute document status based on smart color palette:
- * - review (Purple / بنفسجي): Needs review / verification flag set
- * - expired (Red / أحمر): Expired (< 0 days)
- * - critical (Orange / برتقالي): Expiring within 30 days (0 to 30 days)
- * - expiring_soon (Yellow / أصفر): Expiring within 90 days (31 to 90 days)
- * - valid (Green / أخضر): Valid (> 90 days)
+ * - permanent: Permanent document without expiry (hasNoExpiry)
+ * - expired: Expired (< 0 days)
+ * - critical: Expiring within 30 days (0 to 30 days)
+ * - expiring_soon: Expiring within 90 days (31 to 90 days)
+ * - valid: Valid (> 90 days)
  */
 export function computeDocumentStatus(
-  expiryDateStr: string,
+  expiryDateStr?: string,
   _reminderDays: number = 60,
-  needsReview: boolean = false
+  hasNoExpiry: boolean = false
 ): DocumentStatus {
-  // Autonomously compute status based on actual days without review blockage
+  if (hasNoExpiry || !expiryDateStr) {
+    return 'permanent';
+  }
   const days = getDaysRemaining(expiryDateStr);
   if (days < 0) return 'expired';
   if (days <= 30) return 'critical';
@@ -61,6 +64,9 @@ export function formatDateLocale(dateStr?: string, lang: 'ar' | 'it' = 'it'): st
 }
 
 export function formatRelativeDays(days: number, lang: 'ar' | 'it'): string {
+  if (days >= 999900) {
+    return lang === 'ar' ? 'صلاحية دائمة' : 'Senza scadenza';
+  }
   if (days === 0) {
     return lang === 'ar' ? 'ينتهي اليوم!' : 'Scade oggi!';
   }
@@ -84,13 +90,20 @@ export function extractPotentialDate(text: string): string | null {
     return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
   }
 
-  // Pattern 2: DD/MM/YYYY or DD-MM-YYYY
+  // Pattern 2: DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
   const euMatch = text.match(/\b(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](20\d{2})\b/);
   if (euMatch) {
     return `${euMatch[3]}-${String(euMatch[2]).padStart(2, '0')}-${String(euMatch[1]).padStart(2, '0')}`;
   }
 
   return null;
+}
+
+/**
+ * Normalize any date string into standard ISO YYYY-MM-DD
+ */
+export function normalizeDate(dateStr: string): string | null {
+  return extractPotentialDate(dateStr);
 }
 
 /**
@@ -106,16 +119,19 @@ function escapeICS(str: string): string {
 }
 
 /**
- * Generate RFC 5545 compliant .ics calendar content:
- * - DTEND is set to the NEXT DAY for all-day events (standard RFC requirement)
- * - Escapes special characters
- * - Uses Rinnovami PRODID
+ * Generate RFC 5545 compliant .ics calendar content with 6 explicit VALARM triggers:
+ * - 120 days before (-P120D)
+ * - 60 days before (-P60D)
+ * - 30 days before (-P30D)
+ * - 15 days before (-P15D)
+ * - 7 days before (-P7D)
+ * - 1 day before (-P1D)
  */
 export function generateICSContent(docs: DocumentItem[]): string {
   const events: string[] = [];
 
   docs.forEach((doc) => {
-    if (!doc.expiryDate) return;
+    if (doc.hasNoExpiry || !doc.expiryDate) return;
     const [y, m, d] = doc.expiryDate.split('-').map(Number);
     if (!y || !m || !d) return;
 
@@ -142,21 +158,41 @@ export function generateICSContent(docs: DocumentItem[]): string {
       `DTEND;VALUE=DATE:${endStr}`,
       `SUMMARY:${summary}`,
       `DESCRIPTION:${description}`,
-      // Alarms for 30 days before, 7 days before, 1 day before
+      // 120 days before
+      'BEGIN:VALARM',
+      'TRIGGER:-P120D',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${escapeICS(`Promemoria anticipato (120 gg): ${doc.title} scade tra 120 giorni!`)}`,
+      'END:VALARM',
+      // 60 days before
+      'BEGIN:VALARM',
+      'TRIGGER:-P60D',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${escapeICS(`Promemoria (60 gg): ${doc.title} scade tra 60 giorni!`)}`,
+      'END:VALARM',
+      // 30 days before
       'BEGIN:VALARM',
       'TRIGGER:-P30D',
       'ACTION:DISPLAY',
-      `DESCRIPTION:${escapeICS(`Promemoria: ${doc.title} scade tra 30 giorni!`)}`,
+      `DESCRIPTION:${escapeICS(`Promemoria importante (30 gg): ${doc.title} scade tra 30 giorni!`)}`,
       'END:VALARM',
+      // 15 days before
+      'BEGIN:VALARM',
+      'TRIGGER:-P15D',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${escapeICS(`Attenzione (15 gg): ${doc.title} scade tra 15 giorni!`)}`,
+      'END:VALARM',
+      // 7 days before
       'BEGIN:VALARM',
       'TRIGGER:-P7D',
       'ACTION:DISPLAY',
-      `DESCRIPTION:${escapeICS(`Urgente: ${doc.title} scade tra 7 giorni!`)}`,
+      `DESCRIPTION:${escapeICS(`Urgente (7 gg): ${doc.title} scade tra 7 giorni!`)}`,
       'END:VALARM',
+      // 1 day before
       'BEGIN:VALARM',
       'TRIGGER:-P1D',
       'ACTION:DISPLAY',
-      `DESCRIPTION:${escapeICS(`Critico: ${doc.title} scade domani!`)}`,
+      `DESCRIPTION:${escapeICS(`Critico (domani): ${doc.title} scade domani!`)}`,
       'END:VALARM',
       'END:VEVENT'
     ].join('\r\n');
@@ -174,4 +210,20 @@ export function generateICSContent(docs: DocumentItem[]): string {
     ...events,
     'END:VCALENDAR'
   ].join('\r\n');
+}
+
+/**
+ * Generate 1-click Google Calendar Event URL with document reminder details
+ */
+export function generateGoogleCalendarUrl(doc: DocumentItem): string {
+  if (doc.hasNoExpiry || !doc.expiryDate) return '';
+  const [y, m, d] = doc.expiryDate.split('-').map(Number);
+  const dateStr = `${y}${String(m).padStart(2, '0')}${String(d).padStart(2, '0')}`;
+
+  const title = encodeURIComponent(`⚠️ Rinnovami: Scadenza ${doc.title}`);
+  const details = encodeURIComponent(
+    `Promemoria Scadenza Documento Ufficiale.\nIntestatario: ${doc.holderName || 'N/A'}\nNumero: ${doc.documentNumber || 'N/A'}\nEnte: ${doc.issuingAuthority || 'N/A'}\nNote: ${doc.notes || ''}`
+  );
+
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dateStr}/${dateStr}&details=${details}&sf=true&output=xml`;
 }

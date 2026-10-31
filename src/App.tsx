@@ -46,6 +46,7 @@ import { AppLockScreen } from './components/AppLockScreen';
 import { isCurrentlyLocked, lockAppImmediately, loadLockSettings } from './utils/appLockService';
 import { logActivity } from './utils/auditLogger';
 import { checkAndDispatchAutonomousAlerts } from './utils/autonomousNotifier';
+import { checkAndTriggerLocalNotifications } from './utils/pwaNotificationService';
 
 export const App: React.FC = () => {
   // Localization & Theme with backwards compatibility migration
@@ -186,6 +187,7 @@ export const App: React.FC = () => {
             playAlertSound();
           }
         });
+        checkAndTriggerLocalNotifications(documents, lang).catch(() => {});
       }, 1500);
       return () => clearTimeout(timer);
     }

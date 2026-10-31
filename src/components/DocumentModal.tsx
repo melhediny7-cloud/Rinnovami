@@ -53,6 +53,11 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
   const [issuingAuthority, setIssuingAuthority] = useState('');
   const [reminderDaysBefore, setReminderDaysBefore] = useState(60);
   const [notes, setNotes] = useState('');
+  const [hasNoExpiry, setHasNoExpiry] = useState(false);
+  const [docYear, setDocYear] = useState<number | undefined>(new Date().getFullYear());
+  const [docMonth, setDocMonth] = useState<number | undefined>(new Date().getMonth() + 1);
+  const [tagsInput, setTagsInput] = useState('');
+
 
   // File state
   const [fileData, setFileData] = useState<string | undefined>(undefined);
@@ -98,6 +103,11 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
       setFileType(documentToEdit.fileType);
       setFileSize(documentToEdit.fileSize);
       setIsEncrypted(!!documentToEdit.isEncrypted);
+      setHasNoExpiry(!!documentToEdit.hasNoExpiry);
+      setDocYear(documentToEdit.year || new Date().getFullYear());
+      setDocMonth(documentToEdit.month || new Date().getMonth() + 1);
+      setTagsInput(documentToEdit.tags ? documentToEdit.tags.join(', ') : '');
+
       setParsedResult(null);
       setIsDateEstimated(false);
       setReplaceTargetId(null);

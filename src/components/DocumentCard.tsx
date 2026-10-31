@@ -15,11 +15,13 @@ import {
   CheckCircle2,
   AlertTriangle,
   AlertOctagon,
-  MessageSquare
+  MessageSquare,
+  FolderArchive,
+  Tag
 } from 'lucide-react';
 import { DocumentItem, Language } from '../types';
 import { translations } from '../translations';
-import { computeDocumentStatus, formatDateLocale, formatRelativeDays, getDaysRemaining } from '../utils/dateUtils';
+import { computeDocumentStatus, formatDateLocale, formatRelativeDays, getDaysRemaining, generateGoogleCalendarUrl } from '../utils/dateUtils';
 import { sendSingleDocWhatsApp } from '../utils/whatsappAlertService';
 
 interface DocumentCardProps {
@@ -43,7 +45,7 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
 }) => {
   const t = translations[lang];
   const days = getDaysRemaining(doc.expiryDate);
-  const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore, doc.needsReview);
+  const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore, doc.hasNoExpiry);
 
   // Smart Color Palette requested by user:
   // Green: Valid (> 90 days)
@@ -52,6 +54,14 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
   // Red: Expired (<= 0 days)
   // Purple: Needs Review
   const statusConfig = {
+    permanent: {
+      label: lang === 'ar' ? 'أرشيف دائم' : 'Archivio Permanente',
+      badgeBg: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/70 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800',
+      countdownBg: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300',
+      icon: FolderArchive,
+      borderTop: 'border-t-4 border-t-indigo-500',
+    },
+
     valid: {
       label: lang === 'ar' ? 'ساري (> 90 يوم)' : 'Valido (> 90 gg)',
       badgeBg: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',

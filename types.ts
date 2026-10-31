@@ -7,11 +7,13 @@ export type DocumentCategory =
   | 'assicurazione'
   | 'contratto_affitto'
   | 'contratto_lavoro'
+  | 'busta_paga'
+  | 'certificazione_unica'
   | 'visura_camerale'
   | 'certificato'
   | 'altro';
 
-export type DocumentStatus = 'valid' | 'expiring_soon' | 'critical' | 'expired' | 'review';
+export type DocumentStatus = 'valid' | 'expiring_soon' | 'critical' | 'expired' | 'review' | 'permanent';
 
 export interface DocumentItem {
   id: string;
@@ -31,7 +33,11 @@ export interface DocumentItem {
   fileHash?: string;
   isEncrypted?: boolean;
   isDemo?: boolean;
-  needsReview?: boolean; // Flagged when document was auto-imported and needs date verification
+  needsReview?: boolean;
+  hasNoExpiry?: boolean; // Documento permanente senza scadenza
+  year?: number;
+  month?: number;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
 }

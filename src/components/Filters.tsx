@@ -93,6 +93,7 @@ export const Filters: React.FC<FiltersProps> = ({
             <option value="expiring_soon">🟡 {lang === 'ar' ? 'ينتهي خلال 90 يومًا' : 'Entro 90 giorni'}</option>
             <option value="critical">🟠 {lang === 'ar' ? 'ينتهي خلال 30 يومًا' : 'Entro 30 giorni'}</option>
             <option value="expired">🔴 {lang === 'ar' ? 'منتهي الصلاحية' : 'Scaduto'}</option>
+            <option value="permanent">📁 {lang === 'ar' ? 'أرشيف دائم (بلا انتهاء)' : 'Archivio Permanente'}</option>
             <option value="review">🟣 {lang === 'ar' ? 'يحتاج مراجعة وتأكيد' : 'Da verificare'}</option>
           </select>
 

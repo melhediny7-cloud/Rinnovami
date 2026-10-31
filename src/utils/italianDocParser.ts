@@ -242,42 +242,84 @@ export function extractMRZData(text: string): {
   expiryDate?: string;
   documentNumber?: string;
   nationality?: string;
+  holderName?: string;
+  birthDate?: string;
 } | null {
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim().toUpperCase().replace(/«/g, '<').replace(/ /g, ''))
-    .filter((l) => l.includes('<<') || l.length >= 28);
+    .filter((l) => l.includes('<') && l.length >= 25);
 
-  for (const line of lines) {
-    // TD1 line 2 (Permesso di Soggiorno and CIE): 6 digits (birth), 1 check, 1 sex, 6 digits (expiry), 1 check, 3 letters (nationality)
-    const td1Match = line.match(/(\d{6})\d[MF<](\d{6})\d([A-Z]{3})/);
-    if (td1Match) {
-      const rawExpiry = td1Match[2];
-      const yy = parseInt(rawExpiry.substring(0, 2), 10);
-      const mm = rawExpiry.substring(2, 4);
-      const dd = rawExpiry.substring(4, 6);
-      const fullY = yy < 80 ? 2000 + yy : 1900 + yy;
-      return {
-        expiryDate: `${fullY}-${mm}-${dd}`,
-        nationality: td1Match[3],
-      };
+  let expiryDate: string | undefined;
+  let documentNumber: string | undefined;
+  let nationality: string | undefined;
+  let holderName: string | undefined;
+  let birthDate: string | undefined;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // TD1 Line 1: [ICA][A-Z0-9<]{1}[A-Z]{3}([A-Z0-9<]{9})
+    const td1Line1 = line.match(/^[ICA][A-Z0-9<]{1}[A-Z]{3}([A-Z0-9<]{9})/);
+    if (td1Line1 && !documentNumber) {
+      documentNumber = td1Line1[1].replace(/</g, '');
     }
 
-    // TD3 line 2 (Passports): 9 alphanumeric (number), 1 check, 3 letters, 6 digits (birth), 1 check, 1 sex, 6 digits (expiry)
-    const td3Match = line.match(/([A-Z0-9<]{9})\d[A-Z]{3}(\d{6})\d[MF<](\d{6})\d/);
-    if (td3Match) {
-      const rawExpiry = td3Match[3];
+    // TD1 Line 2: (\d{6})\d[MF<](\d{6})\d([A-Z]{3})
+    const td1Line2 = line.match(/(\d{6})\d[MF<](\d{6})\d([A-Z]{3})/);
+    if (td1Line2) {
+      const rawBirth = td1Line2[1];
+      const byy = parseInt(rawBirth.substring(0, 2), 10);
+      const bfullY = byy < 40 ? 2000 + byy : 1900 + byy;
+      birthDate = `${bfullY}-${rawBirth.substring(2, 4)}-${rawBirth.substring(4, 6)}`;
+
+      const rawExpiry = td1Line2[2];
+      const eyy = parseInt(rawExpiry.substring(0, 2), 10);
+      const efullY = eyy < 80 ? 2000 + eyy : 1900 + eyy;
+      expiryDate = `${efullY}-${rawExpiry.substring(2, 4)}-${rawExpiry.substring(4, 6)}`;
+      nationality = td1Line2[3];
+    }
+
+    // TD1 Line 3: Name line (Surname<<Name)
+    if (line.includes('<<') && /^[A-Z<]{20,}$/.test(line) && !line.startsWith('P<') && !line.startsWith('I<') && !line.startsWith('ID') && !/\d/.test(line)) {
+      const parts = line.split('<<').filter(Boolean);
+      if (parts.length >= 2) {
+        holderName = `${parts[0].replace(/</g, ' ').trim()} ${parts[1].replace(/</g, ' ').trim()}`.trim();
+      }
+    }
+
+    // TD3 Passport:
+    // Line 1: P<[A-Z]{3}([A-Z<]+)
+    const td3Line1 = line.match(/^P<[A-Z]{3}([A-Z0-9<]+)/);
+    if (td3Line1) {
+      const rawNames = td3Line1[1].split('<<');
+      if (rawNames.length >= 2) {
+        const surname = rawNames[0].replace(/</g, ' ').trim();
+        const given = rawNames[1].replace(/</g, ' ').trim();
+        holderName = `${surname} ${given}`.trim();
+      }
+    }
+
+    // TD3 Line 2: ([A-Z0-9<]{9})\d[A-Z]{3}(\d{6})\d[MF<](\d{6})\d
+    const td3Line2 = line.match(/([A-Z0-9<]{9})\d[A-Z]{3}(\d{6})\d[MF<](\d{6})\d/);
+    if (td3Line2) {
+      documentNumber = td3Line2[1].replace(/</g, '');
+      const rawExpiry = td3Line2[3];
       const yy = parseInt(rawExpiry.substring(0, 2), 10);
-      const mm = rawExpiry.substring(2, 4);
-      const dd = rawExpiry.substring(4, 6);
       const fullY = yy < 80 ? 2000 + yy : 1900 + yy;
-      return {
-        documentNumber: td3Match[1].replace(/</g, ''),
-        expiryDate: `${fullY}-${mm}-${dd}`,
-      };
+      expiryDate = `${fullY}-${rawExpiry.substring(2, 4)}-${rawExpiry.substring(4, 6)}`;
     }
   }
 
+  if (expiryDate || documentNumber || holderName) {
+    return {
+      expiryDate,
+      documentNumber,
+      nationality,
+      holderName,
+      birthDate,
+    };
+  }
   return null;
 }
 
@@ -308,6 +350,10 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
     if (mrz.documentNumber && !documentNumber) {
       documentNumber = mrz.documentNumber;
       extractedFields.push(`Numero Documento (MRZ): ${documentNumber}`);
+    }
+    if (mrz.holderName && !holderName) {
+      holderName = mrz.holderName;
+      extractedFields.push(`Intestatario (MRZ): ${holderName}`);
     }
   }
 
@@ -371,7 +417,28 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
     title = 'Contratto di Locazione';
     extractedFields.push('Categoria: Contratto Affitto');
     confidence += 30;
-  } else if (/\bUNILAV\b/.test(upper) || /\bCONTRATTO DI LAVORO\b/.test(upper) || /\bBUSTA PAGA\b/.test(upper)) {
+  } else if (
+    /\bBUSTA PAGA\b/.test(upper) ||
+    /\bCEDOLINO\b/.test(upper) ||
+    /\bPROSPETTO PAGA\b/.test(upper) ||
+    (fileName && /busta[-_ ]?paga|cedolino/i.test(fileName))
+  ) {
+    category = 'busta_paga';
+    title = 'Busta Paga';
+    extractedFields.push('Categoria: Busta Paga');
+    confidence += 40;
+  } else if (
+    /\bCERTIFICAZIONE UNICA\b/.test(upper) ||
+    /\bMODELLO CU\b/.test(upper) ||
+    /\bC\.U\.\b/.test(upper) ||
+    /\bCUD\b/.test(upper) ||
+    (fileName && /certificazione[-_ ]?unica|modello[-_ ]?cu|cud/i.test(fileName))
+  ) {
+    category = 'certificazione_unica';
+    title = 'Certificazione Unica (CU)';
+    extractedFields.push('Categoria: Certificazione Unica');
+    confidence += 40;
+  } else if (/\bUNILAV\b/.test(upper) || /\bCONTRATTO DI LAVORO\b/.test(upper)) {
     category = 'contratto_lavoro';
     title = 'Contratto di Lavoro';
     extractedFields.push('Categoria: Contratto di Lavoro');
@@ -524,7 +591,7 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
   }
 
   if (!issuingAuthority) {
-    const questuraMatch = text.match(/\bquestura\s+(?:di\s+)?([A-Za-zÀ-ÿ\s'-]{3,25})/i);
+    const questuraMatch = text.match(/\bquestura(?:\s+di|\s+d'|\s+)?\s+([A-Za-zÀ-ÿ'-]{3,20})/i);
     if (questuraMatch) {
       issuingAuthority = `Questura di ${questuraMatch[1].trim()}`;
       extractedFields.push(`Ente: ${issuingAuthority}`);
