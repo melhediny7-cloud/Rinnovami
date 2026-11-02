@@ -252,5 +252,44 @@ describe('italianDocParser - Document Analysis & OCR Parser', () => {
       expect(result.expiryDate).toBe('2029-05-15');
       expect(result.holderName).toBe('ROSSI MARIO');
     });
+
+    it('never uses registration date as expiry date for Unilav contracts', () => {
+      const unilavSample = `
+        MINISTERO DEL LAVORO E DELLE POLITICHE SOCIALI
+        MODELLO UNIFICATO LAV - COMUNICAZIONE OBBLIGATORIA
+        Data trasmissione: 02/10/2026
+        Protocollo: 2026-UNILAV-998877 del 02/10/2026
+        QUADRO B - DATORE DI LAVORO: TECNO EDIL SRL
+        QUADRO C - DATI DEL LAVORATORE
+        Cognome: ELSHAHNA
+        Nome: MOHAMED
+        QUADRO D - DATI RAPPORTO DI LAVORO
+        Tipologia contrattuale: A.02.00 TEMPO DETERMINATO
+        Data inizio: 05/10/2026
+        Data fine: 30/06/2027
+      `;
+      const result = analyzeItalianDocumentText(unilavSample, 'ELSHAHNA.pdf');
+      expect(result.category).toBe('contratto_lavoro');
+      expect(result.expiryDate).toBe('2027-06-30');
+      expect(result.expiryDate).not.toBe('2026-10-02'); // Must NEVER be registration date!
+      expect(result.holderName).toContain('ELSHAHNA');
+    });
+
+    it('marks permanent Unilav (A01.00) without expiry date even with transmission date present', () => {
+      const unilavIndet = `
+        MODELLO UNILAV
+        Data di trasmissione: 15/10/2026
+        QUADRO B - DATORE DI LAVORO
+        QUADRO C - LAVORATORE: ELSHAHNA MOHAMED
+        QUADRO D - RAPPORTO DI LAVORO
+        Tipologia contrattuale: A01.00 - TEMPO INDETERMINATO
+        Data inizio: 20/10/2026
+      `;
+      const result = analyzeItalianDocumentText(unilavIndet, 'ELSHAHNA.pdf');
+      expect(result.category).toBe('contratto_lavoro');
+      expect(result.hasNoExpiry).toBe(true);
+      expect(result.expiryDate).toBeUndefined();
+      expect(result.issueDate).toBeDefined();
+    });
   });
 });

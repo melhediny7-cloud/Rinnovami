@@ -180,9 +180,23 @@ function isPrecededByBirthContext(fullText: string, dateIndex: number): boolean 
 }
 
 /**
- * Searches for all dates in a string, filtering out birth dates
+ * Check if a date string is a registration, transmission, communication, or contract start date
  */
-export function findAllCandidateDates(text: string): { raw: string; normalized: string; isFuture: boolean }[] {
+function isPrecededByRegistrationOrStartContext(fullText: string, dateIndex: number): boolean {
+  const windowStart = Math.max(0, dateIndex - 60);
+  const preceding = fullText.slice(windowStart, dateIndex).toLowerCase();
+  return /\b(trasmissione|invio|inviato|comunicazione|registrazione|registrato|stipula|stipulato|ricezione|ricevuto|protocollo|compilazione|sottoscrizione|data\s+inizio|inizio\s+rapporto|decorrenza|assunzione|assunto\s+il)\b/.test(
+    preceding
+  );
+}
+
+/**
+ * Searches for all dates in a string, filtering out birth dates and optionally registration dates
+ */
+export function findAllCandidateDates(
+  text: string,
+  options?: { filterRegistration?: boolean }
+): { raw: string; normalized: string; isFuture: boolean }[] {
   const dates: { raw: string; normalized: string; isFuture: boolean }[] = [];
   const seenNorm = new Set<string>();
   const today = new Date();
@@ -195,6 +209,9 @@ export function findAllCandidateDates(text: string): { raw: string; normalized: 
   while ((match = regexNum.exec(text)) !== null) {
     if (isPrecededByBirthContext(text, match.index)) {
       continue; // Skip birth date
+    }
+    if (options?.filterRegistration && isPrecededByRegistrationOrStartContext(text, match.index)) {
+      continue; // Skip registration/start date when searching for expiry
     }
 
     const norm = normalizeDate(match[0]);
@@ -216,6 +233,9 @@ export function findAllCandidateDates(text: string): { raw: string; normalized: 
     if (isPrecededByBirthContext(text, match.index)) {
       continue;
     }
+    if (options?.filterRegistration && isPrecededByRegistrationOrStartContext(text, match.index)) {
+      continue;
+    }
     const norm = normalizeDate(match[0]);
     if (norm && !seenNorm.has(norm)) {
       seenNorm.add(norm);
@@ -235,6 +255,9 @@ export function findAllCandidateDates(text: string): { raw: string; normalized: 
     if (isPrecededByBirthContext(text, match.index)) {
       continue;
     }
+    if (options?.filterRegistration && isPrecededByRegistrationOrStartContext(text, match.index)) {
+      continue;
+    }
 
     const norm = normalizeDate(match[0]);
     if (norm) {
@@ -252,6 +275,9 @@ export function findAllCandidateDates(text: string): { raw: string; normalized: 
   const regexUsText = /\b([A-Za-z]{3,9})\s+(0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?,?\s+(19\d{2}|20\d{2}|\d{2})\b/gi;
   while ((match = regexUsText.exec(text)) !== null) {
     if (isPrecededByBirthContext(text, match.index)) {
+      continue;
+    }
+    if (options?.filterRegistration && isPrecededByRegistrationOrStartContext(text, match.index)) {
       continue;
     }
 
@@ -643,11 +669,15 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
     }
   }
 
-  // 1c. Check if Document is Permanent / Without Expiry (Illimitata / A tempo indeterminato)
+  // 1c. Check if Document is Permanent / Without Expiry (Illimitata / A tempo indeterminato / Unilav A01.00)
   const isPermanent =
     /\b(?:DURATA\s*:\s*)?ILLIMITAT[AO]\b/.test(upper) ||
     /\bA\s+TEMPO\s+INDETERMINATO\b/.test(upper) ||
     /\bTEMPO\s+INDETERMINATO\b/.test(upper) ||
+    /\bA01\.00\b/.test(upper) ||
+    /\bA\.01\.00\b/.test(upper) ||
+    /\bA01\b/.test(upper) ||
+    /\bNON\s+(?:È|E['’])\s*PREVISTA\s+(?:UNA\s+)?DATA\s+(?:DI\s+)?FINE\b/.test(upper) ||
     /\bSOGGIORNANTE\s+DI\s+LUNGO\s+PERIODO\b/.test(upper) ||
     /\bSENZA\s+SCADENZA\b/.test(upper) ||
     category === 'busta_paga' ||
@@ -663,33 +693,124 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
   // 1d. Extract Category-Specific Dates:
   // For Employment Contract:
   if (category === 'contratto_lavoro') {
-    if (hasNoExpiry) {
+    // 1. Check explicit permanent vs temporary markers
+    const isExplicitIndeterminato =
+      /\bA01\.00\b/i.test(text) ||
+      /\bA\.01\.00\b/i.test(text) ||
+      /\bA01\b/i.test(text) ||
+      /\b(?:A\s+)?TEMPO\s+INDETERMINATO\b/i.test(text) ||
+      /\bNON\s+(?:È|E['’])\s*PREVISTA\s+(?:UNA\s+)?DATA\s+(?:DI\s+)?FINE\b/i.test(text) ||
+      /\bDURATA\s*:\s*INDETERMINAT[AO]\b/i.test(text) ||
+      /\bSENZA\s+(?:TERMINE|SCADENZA)\b/i.test(text);
+
+    const isExplicitDeterminato =
+      /\bA02\.00\b/i.test(text) ||
+      /\bA\.02\.00\b/i.test(text) ||
+      /\bA02\b/i.test(text) ||
+      /\b(?:A\s+)?TEMPO\s+DETERMINATO\b/i.test(text) ||
+      /\bCONTRATTO\s+A\s+TERMINE\b/i.test(text) ||
+      /\bPROROGA\b/i.test(text);
+
+    if (isExplicitIndeterminato && !isExplicitDeterminato) {
+      hasNoExpiry = true;
+      expiryDate = undefined;
       title = 'Contratto di Lavoro a Tempo Indeterminato';
-    } else {
-      // Temporary contract: extract contract termination date
-      const contractEndMatch = text.match(
-        /(?:termine\s*(?:del)?\s*contratto|data\s*(?:di)?\s*cessazione|data\s*fine(?:\s*rapporto)?|scadenza\s*(?:del)?\s*contratto|fino\s+al|fino\s+alla\s+data\s+del|con\s+scadenza\s+il)[\s/:,\-A-Za-z.()]{0,40}?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
-      );
-      if (contractEndMatch && contractEndMatch[1]) {
-        const norm = normalizeDate(contractEndMatch[1]);
-        if (norm) {
-          expiryDate = norm;
-          title = 'Contratto di Lavoro a Tempo Determinato';
-          extractedFields.push(`Data Scadenza Contratto: ${norm}`);
-          confidence += 35;
-        }
+      extractedFields.push('Validità: Contratto a Tempo Indeterminato (Permanente)');
+    }
+
+    // 2. Extract Registration / Transmission Date (Data Invio / Trasmissione / Registrazione)
+    // To ensure this filing/metadata date is NEVER confused with expiryDate
+    const regMatch = text.match(
+      /(?:data\s*(?:di)?\s*trasmissione|data\s*(?:di)?\s*invio|data\s*(?:di)?\s*comunicazione|data\s*(?:di)?\s*registrazione|data\s*(?:di)?\s*stipula|data\s*(?:di)?\s*ricezione|comunicazione\s+inviata\s+il|trasmesso\s+il|inviato\s+il|protocollo\s*(?:n\.?|numero)?\s*[A-Za-z0-9\-_/]+\s+del|ricevuta\s+del)[\s/:,\-A-Za-z.()]{0,35}?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+    );
+    let registrationDate: string | undefined;
+    if (regMatch && regMatch[1]) {
+      registrationDate = normalizeDate(regMatch[1]) ?? undefined;
+      if (registrationDate) {
+        issueDate = registrationDate;
+        extractedFields.push(`Data Registrazione/Invio: ${registrationDate}`);
       }
     }
 
-    // Extract start/hiring date (Data inizio / assunzione)
+    // 3. Extract Contract Start Date (Data Inizio / Assunzione)
     const contractStartMatch = text.match(
-      /(?:data\s*(?:di)?\s*assunzione|data\s*(?:di)?\s*inizio|decorrenza|assunto\s+il)[\s/:,\-A-Za-z.()]{0,40}?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+      /(?:data\s*(?:di)?\s*assunzione|data\s*(?:di)?\s*inizio(?:\s*rapporto)?|decorrenza(?:\s*dal)?|assunto\s+il)[\s/:,\-A-Za-z.()]{0,40}?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
     );
+    let startDate: string | undefined;
     if (contractStartMatch && contractStartMatch[1]) {
-      const norm = normalizeDate(contractStartMatch[1]);
-      if (norm) {
-        issueDate = norm;
-        extractedFields.push(`Data Inizio Assunzione: ${norm}`);
+      startDate = normalizeDate(contractStartMatch[1]) ?? undefined;
+      if (startDate) {
+        issueDate = startDate;
+        extractedFields.push(`Data Inizio Assunzione: ${startDate}`);
+      }
+    }
+
+    // 4. Search for Contract End Date (if not permanent)
+    if (!hasNoExpiry) {
+      // Priority 4a: Explicit contract termination markers
+      const contractEndMatch = text.match(
+        /(?:data\s*(?:di)?\s*fine(?:\s*rapporto)?|data\s*(?:di)?\s*termine(?:\s*rapporto)?|data\s*cessazione(?:\s*rapporto)?|termine\s*(?:del)?\s*rapporto|termine\s*(?:del)?\s*contratto|fine\s+rapporto|scadenza\s*(?:del)?\s*contratto|fino\s+al|fino\s+alla\s+data\s+del|con\s+scadenza\s+il|al\s+giorno)[\s/:,\-A-Za-z.()]{0,40}?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+      );
+      if (contractEndMatch && contractEndMatch[1]) {
+        const norm = normalizeDate(contractEndMatch[1]);
+        if (norm && norm !== registrationDate && norm !== startDate) {
+          expiryDate = norm;
+          title = 'Contratto di Lavoro a Tempo Determinato';
+          extractedFields.push(`Data Fine Contratto: ${norm}`);
+          confidence += 35;
+        }
+      }
+
+      // Priority 4b: Table structure (Data inizio ... Data fine ... followed by dates)
+      if (!expiryDate) {
+        const tableMatch = text.match(
+          /(?:data\s*inizio|inizio)[\s\S]{1,40}?(?:data\s*fine|termine|fine)[\s\S]{1,60}?([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2}))[\s\S]{1,40}?([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2}))/i
+        );
+        if (tableMatch) {
+          const dStart = normalizeDate(tableMatch[1]);
+          const dEnd = normalizeDate(tableMatch[2]);
+          if (dEnd && dEnd !== dStart && dEnd !== registrationDate) {
+            expiryDate = dEnd;
+            title = 'Contratto di Lavoro a Tempo Determinato';
+            extractedFields.push(`Data Fine Contratto (Tabella): ${dEnd}`);
+            confidence += 30;
+          }
+        }
+      }
+
+      // Priority 4c: "dal ... al ..." range
+      if (!expiryDate) {
+        const dalAlMatch = text.match(
+          /\bdal\s+([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2}))\s+al\s+([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2}))/i
+        );
+        if (dalAlMatch) {
+          const dEnd = normalizeDate(dalAlMatch[2]);
+          if (dEnd && dEnd !== registrationDate && dEnd !== startDate) {
+            expiryDate = dEnd;
+            title = 'Contratto di Lavoro a Tempo Determinato';
+            extractedFields.push(`Data Fine Contratto (dal/al): ${dEnd}`);
+            confidence += 30;
+          }
+        }
+      }
+
+      // 5. Final contract evaluation:
+      // If no valid termination date was found:
+      // If not explicitly temporary, Italian contracts are permanent (Tempo Indeterminato) by default.
+      if (!expiryDate) {
+        if (!isExplicitDeterminato) {
+          hasNoExpiry = true;
+          expiryDate = undefined;
+          title = 'Contratto di Lavoro (Indeterminato)';
+          extractedFields.push('Validità: Contratto a Tempo Indeterminato (Nessun termine apposto)');
+        } else {
+          // Explicitly temporary but end date requires user input
+          expiryDate = undefined;
+          needsReview = true;
+          title = 'Contratto di Lavoro a Tempo Determinato';
+          notes = 'عقد محدد المدة - يرجى مراجعة وتحديد تاريخ نهاية العقد يدوياً';
+          extractedFields.push('⚠️ Richiede verifica manuale data termine contratto');
+        }
       }
     }
   }
@@ -800,30 +921,49 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
   }
 
   // 5. Smart Fallback with explicit verification flag (needsReview)
+  // For Employment Contracts: NEVER guess a random date as expiry (it might be registration/protocol date).
   if (!expiryDate && !hasNoExpiry) {
-    const candidateDates = findAllCandidateDates(text);
-    if (candidateDates.length > 0) {
-      const futureDates = candidateDates.filter((d) => d.isFuture);
-      if (futureDates.length > 0) {
-        futureDates.sort((a, b) => a.normalized.localeCompare(b.normalized));
-        expiryDate = futureDates[futureDates.length - 1].normalized;
-        isExpiryEstimated = true;
-        needsReview = true;
-        extractedFields.push(`⚠️ Data Scadenza presunta: ${expiryDate} (richiede verifica)`);
-        confidence += 20;
+    if (category === 'contratto_lavoro') {
+      hasNoExpiry = true;
+      needsReview = true;
+      extractedFields.push('⚠️ Data fine contratto non rilevata - Impostato come permanente con verifica manuale');
+    } else {
+      const candidateDates = findAllCandidateDates(text, { filterRegistration: true });
+      if (candidateDates.length > 0) {
+        const futureDates = candidateDates.filter((d) => d.isFuture);
+        if (futureDates.length > 0) {
+          futureDates.sort((a, b) => a.normalized.localeCompare(b.normalized));
+          expiryDate = futureDates[futureDates.length - 1].normalized;
+          isExpiryEstimated = true;
+          needsReview = true;
+          extractedFields.push(`⚠️ Data Scadenza presunta: ${expiryDate} (richiede verifica)`);
+          confidence += 20;
+        } else {
+          candidateDates.sort((a, b) => a.normalized.localeCompare(b.normalized));
+          expiryDate = candidateDates[candidateDates.length - 1].normalized;
+          isExpiryEstimated = true;
+          needsReview = true;
+          extractedFields.push(`⚠️ Data Scadenza presunta: ${expiryDate} (richiede verifica)`);
+          confidence += 15;
+        }
       } else {
-        candidateDates.sort((a, b) => a.normalized.localeCompare(b.normalized));
-        expiryDate = candidateDates[candidateDates.length - 1].normalized;
-        isExpiryEstimated = true;
         needsReview = true;
-        extractedFields.push(`⚠️ Data Scadenza presunta: ${expiryDate} (richiede verifica)`);
-        confidence += 15;
+        isExpiryEstimated = true;
+        extractedFields.push('⚠️ Nessuna data di scadenza rilevata - Richiede verifica manuale');
       }
+    }
+  }
+
+  // 5b. Safety Verification: Expiry date CAN NEVER be identical to issue / registration date
+  if (expiryDate && issueDate && expiryDate === issueDate) {
+    expiryDate = undefined;
+    if (category === 'contratto_lavoro') {
+      hasNoExpiry = true;
+      needsReview = true;
     } else {
       needsReview = true;
-      isExpiryEstimated = true;
-      extractedFields.push('⚠️ Nessuna data di scadenza rilevata - Richiede verifica manuale');
     }
+    extractedFields.push('⚠️ Data scadenza coincidente con data registrazione/rilascio - Rimossa per sicurezza');
   }
 
   // 6. Extract Document Number
