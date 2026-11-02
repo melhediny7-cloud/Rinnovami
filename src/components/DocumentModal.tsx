@@ -19,7 +19,7 @@ import { translations } from '../translations';
 import { runItalianOCR } from '../utils/ocrService';
 import { ParsedDocumentData } from '../utils/italianDocParser';
 import { compressImageFile } from '../utils/imageCompressor';
-import { getDaysRemaining } from '../utils/dateUtils';
+import { getDaysRemaining, getDefaultReminderDays } from '../utils/dateUtils';
 import { encryptDocumentData } from '../utils/cryptoService';
 import { logActivity } from '../utils/auditLogger';
 import { DuplicateCheckModal } from './DuplicateCheckModal';
@@ -152,13 +152,22 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
 
     // Apply parsed data directly from the document OCR
     if (data.title && !title) setTitle(data.title);
-    if (data.category && data.category !== 'altro') setCategory(data.category);
+    if (data.category && data.category !== 'altro') {
+      setCategory(data.category);
+      setReminderDaysBefore(getDefaultReminderDays(data.category, data.title || title));
+    }
     if (data.documentNumber) setDocumentNumber(data.documentNumber);
     if (data.holderName) setHolderName(data.holderName);
     if (data.issueDate) setIssueDate(data.issueDate);
-    if (data.expiryDate) {
+    if (data.hasNoExpiry) {
+      setHasNoExpiry(true);
+      setExpiryDate('');
+      setIsDateEstimated(false);
+    } else if (data.expiryDate) {
       setExpiryDate(data.expiryDate);
-      setIsDateEstimated(!!data.isExpiryEstimated);
+      setIsDateEstimated(!!data.isExpiryEstimated || !!data.needsReview);
+    } else if (data.needsReview) {
+      setIsDateEstimated(true);
     }
     if (data.issuingAuthority) setIssuingAuthority(data.issuingAuthority);
 
@@ -252,7 +261,7 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
     if (!title.trim()) {
       newErrors.title = t.modal.requiredField;
     }
-    if (!expiryDate) {
+    if (!hasNoExpiry && !expiryDate) {
       newErrors.expiryDate = t.modal.requiredField;
     }
 
@@ -276,7 +285,7 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
       documentNumber: documentNumber.trim(),
       holderName: holderName.trim(),
       issueDate: issueDate || undefined,
-      expiryDate,
+      expiryDate: hasNoExpiry ? '' : expiryDate,
       issuingAuthority: issuingAuthority.trim() || undefined,
       reminderDaysBefore: Number(reminderDaysBefore),
       notes: notes.trim() || undefined,
@@ -286,6 +295,11 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
       fileSize,
       isEncrypted,
       isDemo: false,
+      hasNoExpiry,
+      needsReview: isDateEstimated,
+      year: docYear,
+      month: docMonth,
+      tags: tagsInput ? tagsInput.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
       createdAt: documentToEdit ? documentToEdit.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -511,7 +525,15 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
               </label>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value as DocumentCategory)}
+                onChange={(e) => {
+                  const newCat = e.target.value as DocumentCategory;
+                  setCategory(newCat);
+                  setReminderDaysBefore(getDefaultReminderDays(newCat, title));
+                  if (newCat === 'busta_paga' || newCat === 'certificazione_unica') {
+                    setHasNoExpiry(true);
+                    setExpiryDate('');
+                  }
+                }}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               >
                 {categories.map((cat) => (
@@ -569,16 +591,17 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                  {t.modal.expiryDate} <span className="text-rose-500">*</span>
+                  {t.modal.expiryDate} {!hasNoExpiry && <span className="text-rose-500">*</span>}
                 </label>
-                {isDateEstimated && (
+                {isDateEstimated && !hasNoExpiry && (
                   <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-md border border-amber-300 dark:border-amber-800">
-                    ⚠️ {lang === 'ar' ? 'تاريخ مقدّر (يرجى التأكيد)' : 'Data stimata (verificare)'}
+                    ⚠️ {lang === 'ar' ? 'يحتاج مراجعة وتأكيد' : 'Richiede verifica'}
                   </span>
                 )}
               </div>
               <input
                 type="date"
+                disabled={hasNoExpiry}
                 value={expiryDate}
                 onChange={(e) => {
                   setExpiryDate(e.target.value);
@@ -586,9 +609,36 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
                 }}
                 className={`w-full px-3.5 py-2.5 rounded-xl border ${
                   errors.expiryDate ? 'border-rose-500' : isDateEstimated ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-slate-200 dark:border-slate-700'
-                } bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-bold`}
+                } ${hasNoExpiry ? 'opacity-50 bg-slate-100 dark:bg-slate-800/50 cursor-not-allowed' : 'bg-white dark:bg-slate-800'} text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-bold`}
               />
               {errors.expiryDate && <p className="text-xs text-rose-500 mt-1">{errors.expiryDate}</p>}
+
+              {/* No Expiry Toggle */}
+              <label className="mt-2 flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={hasNoExpiry}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setHasNoExpiry(checked);
+                    if (checked) {
+                      setExpiryDate('');
+                      setIsDateEstimated(false);
+                      if (errors.expiryDate) {
+                        setErrors((prev) => {
+                          const c = { ...prev };
+                          delete c.expiryDate;
+                          return c;
+                        });
+                      }
+                    }
+                  }}
+                  className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300 dark:border-slate-700"
+                />
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                  {lang === 'ar' ? 'صلاحية دائمة / بدون تاريخ انتهاء' : 'Documento permanente / Senza scadenza'}
+                </span>
+              </label>
             </div>
           </div>
 

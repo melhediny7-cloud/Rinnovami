@@ -184,7 +184,11 @@ export function validateDocumentSchema(doc: any): doc is DocumentItem {
   if (!doc || typeof doc !== 'object') return false;
   if (typeof doc.id !== 'string' || !doc.id) return false;
   if (typeof doc.title !== 'string' || !doc.title) return false;
-  if (typeof doc.expiryDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(doc.expiryDate)) return false;
+  if (doc.hasNoExpiry) {
+    // Permanent document without mandatory expiry date
+  } else if (typeof doc.expiryDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(doc.expiryDate)) {
+    return false;
+  }
 
   // Validate optional fileData if present
   if (doc.fileData && !isValidDataUrl(doc.fileData)) {

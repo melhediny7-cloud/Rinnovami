@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, AlertOctagon, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
+import { Layers, AlertOctagon, AlertTriangle, Clock, CheckCircle2, FolderArchive } from 'lucide-react';
 import { DocumentItem, DocumentStatus, Language } from '../types';
 import { translations } from '../translations';
 import { computeDocumentStatus } from '../utils/dateUtils';
@@ -24,13 +24,15 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
   let expiringSoon = 0;
   let valid = 0;
   let review = 0;
+  let permanent = 0;
 
   documents.forEach((doc) => {
-    const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore, doc.needsReview);
+    const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore, doc.hasNoExpiry, doc.needsReview);
     if (status === 'review') review++;
     else if (status === 'expired') expired++;
     else if (status === 'critical') critical++;
     else if (status === 'expiring_soon') expiringSoon++;
+    else if (status === 'permanent') permanent++;
     else valid++;
   });
 
@@ -47,7 +49,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
     },
     {
       id: 'valid' as const,
-      label: lang === 'ar' ? 'ساري (> 90 يوم)' : 'Valido (> 90 gg)',
+      label: lang === 'ar' ? 'ساري المفعول' : 'Valido',
       count: valid,
       icon: CheckCircle2,
       bgGrad: 'from-emerald-500/10 to-teal-600/5',
@@ -57,7 +59,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
     },
     {
       id: 'expiring_soon' as const,
-      label: lang === 'ar' ? 'ينتهي خلال 90 يومًا' : 'Entro 90 giorni',
+      label: lang === 'ar' ? 'يقترب من الانتهاء' : 'In Scadenza',
       count: expiringSoon,
       icon: Clock,
       bgGrad: 'from-yellow-500/15 to-amber-600/10',
@@ -67,7 +69,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
     },
     {
       id: 'critical' as const,
-      label: lang === 'ar' ? 'ينتهي خلال 30 يومًا' : 'Entro 30 giorni',
+      label: lang === 'ar' ? 'عاجل وحرج' : 'Scadenza Imminente',
       count: critical,
       icon: AlertTriangle,
       bgGrad: 'from-orange-500/15 to-amber-600/10',
@@ -91,14 +93,28 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
       ? [
           {
             id: 'review' as const,
-            label: lang === 'ar' ? 'يحتاج مراجعة' : 'Da verificare',
+            label: lang === 'ar' ? 'يحتاج مراجعة' : 'Da Verificare',
             count: review,
             icon: AlertTriangle,
-            bgGrad: 'from-purple-500/15 to-indigo-600/10',
-            activeRing: 'ring-purple-500 dark:ring-purple-400',
-            textColor: 'text-purple-700 dark:text-purple-300',
-            iconColor: 'text-purple-600 dark:text-purple-400',
+            bgGrad: 'from-amber-500/15 to-yellow-600/10',
+            activeRing: 'ring-amber-500 dark:ring-amber-400',
+            textColor: 'text-amber-700 dark:text-amber-300',
+            iconColor: 'text-amber-600 dark:text-amber-400',
             pulse: true,
+          },
+        ]
+      : []),
+    ...(permanent > 0
+      ? [
+          {
+            id: 'permanent' as const,
+            label: lang === 'ar' ? 'صلاحية دائمة' : 'Senza Scadenza',
+            count: permanent,
+            icon: FolderArchive,
+            bgGrad: 'from-indigo-500/15 to-blue-600/10',
+            activeRing: 'ring-indigo-500 dark:ring-indigo-400',
+            textColor: 'text-indigo-700 dark:text-indigo-300',
+            iconColor: 'text-indigo-600 dark:text-indigo-400',
           },
         ]
       : []),

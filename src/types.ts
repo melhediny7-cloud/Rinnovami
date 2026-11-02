@@ -10,6 +10,9 @@ export type DocumentCategory =
   | 'busta_paga'
   | 'certificazione_unica'
   | 'visura_camerale'
+  | 'durc'
+  | 'visita_medica'
+  | 'corso_sicurezza'
   | 'certificato'
   | 'altro';
 

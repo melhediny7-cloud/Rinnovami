@@ -230,7 +230,7 @@ export const App: React.FC = () => {
   // Urgent Count (Expired + Critical)
   const urgentCount = useMemo(() => {
     return documents.filter((doc) => {
-      const s = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore);
+      const s = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore, doc.hasNoExpiry, doc.needsReview);
       return s === 'expired' || s === 'critical';
     }).length;
   }, [documents]);
@@ -279,7 +279,7 @@ export const App: React.FC = () => {
 
         // Status filter
         if (selectedStatus !== 'all') {
-          const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore);
+          const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore, doc.hasNoExpiry, doc.needsReview);
           if (status !== selectedStatus) {
             return false;
           }

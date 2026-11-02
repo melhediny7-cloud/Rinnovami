@@ -51,6 +51,22 @@ describe('dateUtils - Scadenza & Data Intelligence', () => {
     expect(computeDocumentStatus('', 60, true)).toBe('permanent');
   });
 
+  it('correctly uses dynamic custom reminderDaysBefore for specific documents like DURC, Visita Medica, etc.', () => {
+    // DURC (10 days lead time): 75 days remaining must be VALID, not expiring soon!
+    expect(computeDocumentStatus(getTodayOffset(75), 10)).toBe('valid');
+    expect(computeDocumentStatus(getTodayOffset(15), 10)).toBe('valid');
+    expect(computeDocumentStatus(getTodayOffset(9), 10)).toBe('expiring_soon');
+    expect(computeDocumentStatus(getTodayOffset(4), 10)).toBe('critical');
+
+    // Visita Medica (20 days lead time):
+    expect(computeDocumentStatus(getTodayOffset(25), 20)).toBe('valid');
+    expect(computeDocumentStatus(getTodayOffset(18), 20)).toBe('expiring_soon');
+    expect(computeDocumentStatus(getTodayOffset(10), 20)).toBe('critical');
+
+    // Review flag overrides normal status:
+    expect(computeDocumentStatus(getTodayOffset(10), 60, false, true)).toBe('review');
+  });
+
   it('formats dates in Italian and Arabic locales', () => {
     const testDate = '2026-10-31';
     const formattedIt = formatDateLocale(testDate, 'it');

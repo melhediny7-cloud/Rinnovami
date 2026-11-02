@@ -13,6 +13,8 @@ export interface ParsedDocumentData {
   extractedFields: string[];
   rawText: string;
   isExpiryEstimated?: boolean;
+  hasNoExpiry?: boolean;
+  needsReview?: boolean;
 }
 
 const ITALIAN_AND_ENG_MONTHS: Record<string, string> = {
@@ -45,20 +47,51 @@ const ITALIAN_AND_ENG_MONTHS: Record<string, string> = {
 };
 
 /**
+ * Smart OCR Sanitizer for Date Strings:
+ * 1. Collapses whitespace around date separators (\s*[/.-]\s*): e.g. "15 / 09 / 2028" -> "15/09/2028"
+ * 2. Fixes OCR letter confusions in numeric date fragments:
+ *    - 'O', 'o', 'Q' -> '0'
+ *    - 'I', 'l', '|', '!' -> '1'
+ *    - 'S', 's' -> '5'
+ *    - 'B' -> '8'
+ */
+export function sanitizeDateCandidate(raw: string): string {
+  if (!raw) return '';
+  let str = raw.trim();
+
+  // 1. Remove spaces around delimiters: e.g. "15 / 09 / 2028" -> "15/09/2028", "15 . 09 . 2028" -> "15.09.2028"
+  str = str.replace(/([0-9a-zA-Z]+)\s*([/.\-,])\s*([0-9a-zA-Z]+)\s*([/.\-,])\s*([0-9a-zA-Z]+)/g, '$1$2$3$4$5');
+  str = str.replace(/([0-9a-zA-Z]+)\s*([/.\-,])\s*([0-9a-zA-Z]+)/g, '$1$2$3');
+
+  // 2. Fix OCR letter misreadings in date patterns: e.g. "31/12/2O28" -> "31/12/2028", "l5/O9/2O28" -> "15/09/2028"
+  str = str.replace(/\b([0-9OIliSBs]{1,2})([/.\-,])([0-9OIliSBs]{1,2})([/.\-,])([0-9OIliSBs]{2,4})\b/g, (_m, p1, sep1, p2, sep2, p3) => {
+    const fixDigits = (s: string) =>
+      s
+        .replace(/[OoQ]/g, '0')
+        .replace(/[Il|!]/g, '1')
+        .replace(/[Ss]/g, '5')
+        .replace(/[B]/g, '8');
+    return `${fixDigits(p1)}${sep1}${fixDigits(p2)}${sep2}${fixDigits(p3)}`;
+  });
+
+  return str;
+}
+
+/**
  * Normalizes text and formats dates to YYYY-MM-DD
  * Supports:
  * - DD/MM/YYYY and MM/DD/YYYY (e.g. 01/16/2027 or 16/01/2027)
  * - YYYY-MM-DD (ISO)
  * - 2-digit years (e.g. 16/01/27 or 01/16/27)
  * - Textual Italian & English months (e.g. "16 Gennaio 2027", "January 16, 2027")
- * Handles comma, dot, slash, dash separators.
+ * Handles comma, dot, slash, dash separators and spaces around separators.
  */
 export function normalizeDate(dateStr: string): string | null {
   if (!dateStr) return null;
-  const clean = dateStr.trim();
+  const clean = sanitizeDateCandidate(dateStr);
 
   // Pattern 1: ISO YYYY-MM-DD / YYYY/MM/DD / YYYY.MM.DD
-  const isoMatch = clean.match(/\b(19\d{2}|20\d{2})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])\b/);
+  const isoMatch = clean.match(/\b(19\d{2}|20\d{2})\s*[-/.]\s*(0?[1-9]|1[0-2])\s*[-/.]\s*(0?[1-9]|[12]\d|3[01])\b/);
   if (isoMatch) {
     const y = isoMatch[1];
     const m = String(isoMatch[2]).padStart(2, '0');
@@ -67,7 +100,7 @@ export function normalizeDate(dateStr: string): string | null {
   }
 
   // Pattern 2: Two numbers + Year (DD/MM/YYYY or MM/DD/YYYY)
-  const numMatch = clean.match(/\b(\d{1,2})[-/. ,](\d{1,2})[-/. ,](19\d{2}|20\d{2}|\d{2})\b/);
+  const numMatch = clean.match(/\b(\d{1,2})\s*[-/. ,]\s*(\d{1,2})\s*[-/. ,]\s*(19\d{2}|20\d{2}|\d{2})\b/);
   if (numMatch) {
     const n1 = parseInt(numMatch[1], 10);
     const n2 = parseInt(numMatch[2], 10);
@@ -143,7 +176,7 @@ export function normalizeDate(dateStr: string): string | null {
 function isPrecededByBirthContext(fullText: string, dateIndex: number): boolean {
   const windowStart = Math.max(0, dateIndex - 45);
   const preceding = fullText.slice(windowStart, dateIndex).toLowerCase();
-  return /\b(nato|nata|nascita|data di nascita|nato il|nata il|nato a|nata a)\b/.test(preceding);
+  return /\b(nato|nata|nascita|data di nascita|nato il|nata il|nato a|nata a|\b3[.\s:,]+|data nascita|d\.?\s*nascita|date of birth)\b/.test(preceding);
 }
 
 /**
@@ -151,11 +184,12 @@ function isPrecededByBirthContext(fullText: string, dateIndex: number): boolean 
  */
 export function findAllCandidateDates(text: string): { raw: string; normalized: string; isFuture: boolean }[] {
   const dates: { raw: string; normalized: string; isFuture: boolean }[] = [];
+  const seenNorm = new Set<string>();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Regex for numeric dates (supports DD/MM/YYYY and MM/DD/YYYY, with 4-digit or 2-digit years)
-  const regexNum = /\b(\d{1,2})[-/. ,](\d{1,2})[-/. ,](19\d{2}|20\d{2}|\d{2})\b/g;
+  // Regex for numeric dates (supports DD/MM/YYYY and MM/DD/YYYY, with 4-digit or 2-digit years, and spaces)
+  const regexNum = /\b(\d{1,2})\s*[-/. ,]\s*(\d{1,2})\s*[-/. ,]\s*(19\d{2}|20\d{2}|\d{2})\b/g;
   let match: RegExpExecArray | null;
 
   while ((match = regexNum.exec(text)) !== null) {
@@ -164,7 +198,8 @@ export function findAllCandidateDates(text: string): { raw: string; normalized: 
     }
 
     const norm = normalizeDate(match[0]);
-    if (norm) {
+    if (norm && !seenNorm.has(norm)) {
+      seenNorm.add(norm);
       const [y, m, d] = norm.split('-').map(Number);
       const dateObj = new Date(y, m - 1, d);
       dates.push({
@@ -176,13 +211,14 @@ export function findAllCandidateDates(text: string): { raw: string; normalized: 
   }
 
   // Regex for ISO dates
-  const regexIso = /\b(19\d{2}|20\d{2})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])\b/g;
+  const regexIso = /\b(19\d{2}|20\d{2})\s*[-/.]\s*(0?[1-9]|1[0-2])\s*[-/.]\s*(0?[1-9]|[12]\d|3[01])\b/g;
   while ((match = regexIso.exec(text)) !== null) {
     if (isPrecededByBirthContext(text, match.index)) {
       continue;
     }
     const norm = normalizeDate(match[0]);
-    if (norm) {
+    if (norm && !seenNorm.has(norm)) {
+      seenNorm.add(norm);
       const [y, m, d] = norm.split('-').map(Number);
       const dateObj = new Date(y, m - 1, d);
       dates.push({
@@ -324,7 +360,77 @@ export function extractMRZData(text: string): {
 }
 
 /**
- * Core Italian Document Analyzer with strict regex boundaries, dal..al parsing, and false positive guards
+ * Clean holder name by stripping common form table headers (e.g. "Sesso", "Data di nascita", "Luogo")
+ */
+export function cleanNameCandidate(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  let str = raw.split(/\r?\n/)[0];
+  str = str
+    .replace(
+      /\b(sesso|data|nascita|luogo|comune|provincia|cittadinanza|codice|fiscale|nato|residenza|domicilio|rilascio|scadenza|questura|firma|qualifica|mansione|livello|datore|lavoratore|sede|ditta|societa)\b.*/i,
+      ''
+    )
+    .trim();
+  str = str.replace(/[^A-Za-zÀ-ÿ\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (str.length < 2 || str.length > 35) return undefined;
+  if (/^(nome|cognome|datore|lavoratore|dipendente|firma|nato|sesso|data|comune|provincia)$/i.test(str)) return undefined;
+  return str;
+}
+
+/**
+ * Intelligent extraction of holder name tailored to document category
+ */
+export function extractCleanHolderName(text: string, category: DocumentCategory): string | undefined {
+  // 1. In employment contracts: check worker / employee name first
+  if (category === 'contratto_lavoro') {
+    const workerMatch = text.match(
+      /(?:lavoratore(?:\s+subordinato)?|dipendente|nominativo\s+lavoratore|lavoratore\s*:|cognome\s+e\s+nome(?:\s+del\s+lavoratore)?)\s*[:.-]?\s*([A-Za-zÀ-ÿ\s'-]{3,35})/i
+    );
+    if (workerMatch) {
+      const candidate = cleanNameCandidate(workerMatch[1]);
+      if (candidate) return candidate;
+    }
+  }
+
+  // 2. In courses: check participant / corsista
+  if (category === 'corso_sicurezza') {
+    const corsistaMatch = text.match(
+      /(?:rilasciato\s+a|si\s+attesta\s+che|attestato\s+a|partecipante|corsista)\s*[:.-]?\s*([A-Za-zÀ-ÿ\s'-]{3,35})/i
+    );
+    if (corsistaMatch) {
+      const candidate = cleanNameCandidate(corsistaMatch[1]);
+      if (candidate) return candidate;
+    }
+  }
+
+  // 3. In medical visits: check worker / patient
+  if (category === 'visita_medica') {
+    const pazienteMatch = text.match(
+      /(?:lavoratore|dipendente|paziente|visita\s+del\s+lavoratore)\s*[:.-]?\s*([A-Za-zÀ-ÿ\s'-]{3,35})/i
+    );
+    if (pazienteMatch) {
+      const candidate = cleanNameCandidate(pazienteMatch[1]);
+      if (candidate) return candidate;
+    }
+  }
+
+  // 4. Standard Italian Cognome + Nome lines
+  const cognomeMatch = text.match(/(?:1\.\s*cognome|\bcognome\b)[\s:]+([A-Za-zÀ-ÿ\s'-]{2,35})/i);
+  const nomeMatch = text.match(/(?:2\.\s*nome|\bnome\b)[\s:]+([A-Za-zÀ-ÿ\s'-]{2,35})/i);
+
+  const c = cleanNameCandidate(cognomeMatch ? cognomeMatch[1] : undefined);
+  const n = cleanNameCandidate(nomeMatch ? nomeMatch[1] : undefined);
+
+  if (c && n) return `${c} ${n}`;
+  if (c) return c;
+  if (n) return n;
+
+  return undefined;
+}
+
+/**
+ * Core Italian Document Analyzer with strict regex boundaries, multi-page dossier detection,
+ * and robust contract / course / medical / residence permit separation.
  */
 export function analyzeItalianDocumentText(text: string, fileName?: string): ParsedDocumentData {
   const upper = text.toUpperCase();
@@ -340,27 +446,119 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
   let issuingAuthority: string | undefined = undefined;
   let notes: string | undefined = undefined;
   let isExpiryEstimated = false;
+  let hasNoExpiry = false;
+  let needsReview = false;
 
-  // 0. Check MRZ (Machine Readable Zone) first for 100% reliable extraction
-  const mrz = extractMRZData(text);
-  if (mrz?.expiryDate) {
-    expiryDate = mrz.expiryDate;
-    extractedFields.push(`Data Scadenza (MRZ automatica): ${expiryDate}`);
+  // 1. PRIMARY MULTI-PAGE & ORGANIZATIONAL DOCUMENT DETECTION
+  // Check for Employment Contract, Medical Visit, Course, DURC, Payroll before standalone ID cards.
+  // This guarantees a contract that quotes or attaches a worker's permit is classified as a CONTRACT.
+  const isEmploymentContract =
+    /\b(CONTRATTO DI SOGGIORNO|CONTRATTO DI LAVORO|LETTERA DI ASSUNZIONE|MODELLO UNILAV|UNILAV|UNISOMM|UNIFICATO[- ]?LAV|COMUNICAZIONE OBBLIGATORIA|MINISTERO DEL LAVORO|CENTRO PER L['’]?IMPIEGO|MODELLO Q)\b/.test(upper) ||
+    (/\bDATORE DI LAVORO\b/.test(upper)) ||
+    (/\bDATORE\b/.test(upper) && (/\bLAVORATORE\b/.test(upper) || /\bMANSIONE\b/.test(upper) || /\bASSUNTO\b/.test(upper) || /\bDIPENDENTE\b/.test(upper))) ||
+    (/\b(RAPPORTO DI LAVORO|LAVORO DOMESTICO)\b/.test(upper)) ||
+    (/\bLAVORO SUBORDINATO\b/.test(upper) && (/\bCONTRATTO\b/.test(upper) || /\bCCNL\b/.test(upper) || /\bASSUNZION[EI]\b/.test(upper) || /\bMANSION[EI]\b/.test(upper) || /\bDATORE\b/.test(upper) || /\bQUALIFICA\b/.test(upper) || /\bTEMPO (?:IN)?DETERMINATO\b/.test(upper))) ||
+    (/\bTEMPO (?:IN)?DETERMINATO\b/.test(upper) && (/\bCONTRATTO\b/.test(upper) || /\bCCNL\b/.test(upper) || /\bASSUNZIONE\b/.test(upper) || /\bMANSION[EI]\b/.test(upper) || /\bLAVORO\b/.test(upper) || /\bINIZIO RAPPORTO\b/.test(upper))) ||
+    (/\bSPORTELLO UNICO\b/.test(upper) && /\bSOGGIORNO\b/.test(upper) && /\bLAVORO\b/.test(upper)) ||
+    (fileName && /contratto|unilav|assunzione/i.test(fileName));
+
+  const isVisitaMedica =
+    /\bVISITA MEDICA\b/.test(upper) ||
+    /\bGIUDIZIO DI IDONEIT[AÀ]\b/.test(upper) ||
+    /\bMEDICO COMPETENTE\b/.test(upper) ||
+    /\bSORVEGLIANZA SANITARIA\b/.test(upper) ||
+    /\bIDONEIT[AÀ] ALLA MANSIONE\b/.test(upper) ||
+    /\bMEDICINA DEL LAVORO\b/.test(upper) ||
+    (fileName && /visita[-_ ]?medica|idoneita/i.test(fileName));
+
+  const isCorsoSicurezza =
+    /\bCORSO DI FORMAZIONE\b/.test(upper) ||
+    /\bATTESTATO DI FREQUENZA\b/.test(upper) ||
+    /\bATTESTATO DI PARTECIPAZIONE\b/.test(upper) ||
+    /\bSICUREZZA SUL LAVORO\b/.test(upper) ||
+    /\bD\.?LGS\.?\s*(?:N\.?\s*)?81\/(?:20)?08\b/.test(upper) ||
+    /\bACCORDO STATO[- ]REGIONI\b/.test(upper) ||
+    /\bPRIMO SOCCORSO\b/.test(upper) ||
+    /\bANTINCENDIO\b/.test(upper) ||
+    /\bRLS\b/.test(upper) ||
+    /\bRSPP\b/.test(upper) ||
+    (fileName && /corso|sicurezza|attestato/i.test(fileName));
+
+  const isDurc =
+    /\bDURC\b/.test(upper) ||
+    /\bDOCUMENTO UNICO DI REGOLARIT[AÀ] CONTRIBUTIVA\b/.test(upper) ||
+    (/\bREGOLARIT[AÀ] CONTRIBUTIVA\b/.test(upper) && (/\bINPS\b/.test(upper) || /\bINAIL\b/.test(upper))) ||
+    (fileName && /durc/i.test(fileName));
+
+  const isBustaPaga =
+    /\bBUSTA PAGA\b/.test(upper) ||
+    /\bCEDOLINO\b/.test(upper) ||
+    /\bPROSPETTO PAGA\b/.test(upper) ||
+    (fileName && /busta[-_ ]?paga|cedolino/i.test(fileName));
+
+  const isCertificazioneUnica =
+    /\bCERTIFICAZIONE UNICA\b/.test(upper) ||
+    /\bMODELLO CU\b/.test(upper) ||
+    /\bC\.U\.\b/.test(upper) ||
+    /\bCUD\b/.test(upper) ||
+    (fileName && /certificazione[-_ ]?unica|modello[-_ ]?cu|cud/i.test(fileName));
+
+  const isAssicurazione =
+    /\bCERTIFICATO DI ASSICURAZIONE\b/.test(upper) ||
+    /\bPOLIZZA RCA\b/.test(upper) ||
+    /\bCONTRATTO DI ASSICURAZIONE\b/.test(upper) ||
+    (/\bASSICURAZIONE\b/.test(upper) && (/\bVEICOLI\b/.test(upper) || /\bMASSIMALE\b/.test(upper)));
+
+  const isContrattoAffitto =
+    /\bCONTRATTO DI LOCAZIONE\b/.test(upper) ||
+    /\bCONTRATTO DI AFFITTO\b/.test(upper) ||
+    (fileName && /locazione|affitto/i.test(fileName));
+
+  if (isEmploymentContract) {
+    category = 'contratto_lavoro';
+    title = 'Contratto di Lavoro';
+    extractedFields.push('Categoria: Contratto di Lavoro');
     confidence += 45;
-    if (mrz.documentNumber && !documentNumber) {
-      documentNumber = mrz.documentNumber;
-      extractedFields.push(`Numero Documento (MRZ): ${documentNumber}`);
-    }
-    if (mrz.holderName && !holderName) {
-      holderName = mrz.holderName;
-      extractedFields.push(`Intestatario (MRZ): ${holderName}`);
-    }
-  }
-
-  // 1. Detect Category with strict boundaries
-  if (
+  } else if (isVisitaMedica) {
+    category = 'visita_medica';
+    title = 'Visita Medica di Idoneità';
+    extractedFields.push('Categoria: Visita Medica');
+    confidence += 45;
+  } else if (isCorsoSicurezza) {
+    category = 'corso_sicurezza';
+    title = 'Attestato Corso Sicurezza';
+    extractedFields.push('Categoria: Corso Sicurezza');
+    confidence += 45;
+  } else if (isDurc) {
+    category = 'durc';
+    title = 'DURC - Regolarità Contributiva';
+    issuingAuthority = 'INPS - INAIL';
+    extractedFields.push('Categoria: DURC INPS/INAIL');
+    confidence += 45;
+  } else if (isBustaPaga) {
+    category = 'busta_paga';
+    title = 'Busta Paga';
+    hasNoExpiry = true;
+    extractedFields.push('Categoria: Busta Paga (Permanente)');
+    confidence += 45;
+  } else if (isCertificazioneUnica) {
+    category = 'certificazione_unica';
+    title = 'Certificazione Unica (CU)';
+    hasNoExpiry = true;
+    extractedFields.push('Categoria: Certificazione Unica (Permanente)');
+    confidence += 45;
+  } else if (isAssicurazione) {
+    category = 'assicurazione';
+    title = 'Assicurazione Auto (RCA)';
+    extractedFields.push('Categoria: Assicurazione');
+    confidence += 40;
+  } else if (isContrattoAffitto) {
+    category = 'contratto_affitto';
+    title = 'Contratto di Locazione';
+    extractedFields.push('Categoria: Contratto Affitto');
+    confidence += 40;
+  } else if (
     /\bPERMESSO DI SOGGIORNO\b/.test(upper) ||
-    /\bTITOLO DI SOGGIORNO\b/.test(upper) ||
     /\bCARTA DI SOGGIORNO\b/.test(upper) ||
     /\bSOGGIORNANTE DI LUNGO PERIODO\b/.test(upper) ||
     (/\bQUESTURA\b/.test(upper) && /\bSTRANIERI\b/.test(upper))
@@ -397,58 +595,127 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
     title = 'Tessera Sanitaria (TEAM)';
     extractedFields.push('Categoria: Tessera Sanitaria');
     confidence += 35;
-  } else if (
-    /\bCERTIFICATO DI ASSICURAZIONE\b/.test(upper) ||
-    /\bPOLIZZA RCA\b/.test(upper) ||
-    /\bCONTRATTO DI ASSICURAZIONE\b/.test(upper) ||
-    (/\bASSICURAZIONE\b/.test(upper) && /\bVEICOLI\b/.test(upper))
-  ) {
-    category = 'assicurazione';
-    title = 'Assicurazione Auto (RCA)';
-    extractedFields.push('Categoria: Assicurazione');
-    confidence += 35;
   } else if (/\bPASSAPORTO\b/.test(upper) || /\bPASSPORT\b/.test(upper)) {
     category = 'passaporto';
     title = 'Passaporto';
     extractedFields.push('Categoria: Passaporto');
     confidence += 35;
-  } else if (/\bCONTRATTO DI LOCAZIONE\b/.test(upper) || /\bCONTRATTO DI AFFITTO\b/.test(upper)) {
-    category = 'contratto_affitto';
-    title = 'Contratto di Locazione';
-    extractedFields.push('Categoria: Contratto Affitto');
-    confidence += 30;
-  } else if (
-    /\bBUSTA PAGA\b/.test(upper) ||
-    /\bCEDOLINO\b/.test(upper) ||
-    /\bPROSPETTO PAGA\b/.test(upper) ||
-    (fileName && /busta[-_ ]?paga|cedolino/i.test(fileName))
-  ) {
-    category = 'busta_paga';
-    title = 'Busta Paga';
-    extractedFields.push('Categoria: Busta Paga');
-    confidence += 40;
-  } else if (
-    /\bCERTIFICAZIONE UNICA\b/.test(upper) ||
-    /\bMODELLO CU\b/.test(upper) ||
-    /\bC\.U\.\b/.test(upper) ||
-    /\bCUD\b/.test(upper) ||
-    (fileName && /certificazione[-_ ]?unica|modello[-_ ]?cu|cud/i.test(fileName))
-  ) {
-    category = 'certificazione_unica';
-    title = 'Certificazione Unica (CU)';
-    extractedFields.push('Categoria: Certificazione Unica');
-    confidence += 40;
-  } else if (/\bUNILAV\b/.test(upper) || /\bCONTRATTO DI LAVORO\b/.test(upper)) {
-    category = 'contratto_lavoro';
-    title = 'Contratto di Lavoro';
-    extractedFields.push('Categoria: Contratto di Lavoro');
-    confidence += 30;
   }
 
-  // 2. Extract Range "dal ... al ..." (Common in Italian permits and insurance)
-  if (!expiryDate) {
+  // 1b. MRZ (Machine Readable Zone) handling:
+  // If the document is a standalone ID card (Permesso, CIE, Passaporto), MRZ is 100% authoritative.
+  // If the document is a CONTRACT or COURSE, any attached MRZ belongs to an identity photocopy, so do NOT use it for the contract's expiry!
+  const mrz = extractMRZData(text);
+  const isStandaloneCard =
+    category === 'permesso_soggiorno' ||
+    category === 'carta_identita' ||
+    category === 'passaporto' ||
+    category === 'altro';
+
+  if (mrz) {
+    if (isStandaloneCard && mrz.expiryDate) {
+      expiryDate = mrz.expiryDate;
+      extractedFields.push(`Data Scadenza (MRZ automatica): ${expiryDate}`);
+      confidence += 45;
+    }
+    if (isStandaloneCard && mrz.documentNumber && !documentNumber) {
+      documentNumber = mrz.documentNumber;
+      extractedFields.push(`Numero Documento (MRZ): ${documentNumber}`);
+    }
+    if (mrz.holderName && !holderName) {
+      const cleanMrzName = cleanNameCandidate(mrz.holderName);
+      if (cleanMrzName) {
+        holderName = cleanMrzName;
+        extractedFields.push(`Intestatario: ${holderName}`);
+      }
+    }
+  }
+
+  // 1c. Check if Document is Permanent / Without Expiry (Illimitata / A tempo indeterminato)
+  const isPermanent =
+    /\b(?:DURATA\s*:\s*)?ILLIMITAT[AO]\b/.test(upper) ||
+    /\bA\s+TEMPO\s+INDETERMINATO\b/.test(upper) ||
+    /\bTEMPO\s+INDETERMINATO\b/.test(upper) ||
+    /\bSOGGIORNANTE\s+DI\s+LUNGO\s+PERIODO\b/.test(upper) ||
+    /\bSENZA\s+SCADENZA\b/.test(upper) ||
+    category === 'busta_paga' ||
+    category === 'certificazione_unica';
+
+  if (isPermanent) {
+    hasNoExpiry = true;
+    expiryDate = undefined;
+    extractedFields.push('Validità: Documento Permanente / Senza Scadenza');
+    confidence += 25;
+  }
+
+  // 1d. Extract Category-Specific Dates:
+  // For Employment Contract:
+  if (category === 'contratto_lavoro') {
+    if (hasNoExpiry) {
+      title = 'Contratto di Lavoro a Tempo Indeterminato';
+    } else {
+      // Temporary contract: extract contract termination date
+      const contractEndMatch = text.match(
+        /(?:termine\s*(?:del)?\s*contratto|data\s*(?:di)?\s*cessazione|data\s*fine(?:\s*rapporto)?|scadenza\s*(?:del)?\s*contratto|fino\s+al|fino\s+alla\s+data\s+del|con\s+scadenza\s+il)[\s/:,\-A-Za-z.()]{0,40}?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+      );
+      if (contractEndMatch && contractEndMatch[1]) {
+        const norm = normalizeDate(contractEndMatch[1]);
+        if (norm) {
+          expiryDate = norm;
+          title = 'Contratto di Lavoro a Tempo Determinato';
+          extractedFields.push(`Data Scadenza Contratto: ${norm}`);
+          confidence += 35;
+        }
+      }
+    }
+
+    // Extract start/hiring date (Data inizio / assunzione)
+    const contractStartMatch = text.match(
+      /(?:data\s*(?:di)?\s*assunzione|data\s*(?:di)?\s*inizio|decorrenza|assunto\s+il)[\s/:,\-A-Za-z.()]{0,40}?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+    );
+    if (contractStartMatch && contractStartMatch[1]) {
+      const norm = normalizeDate(contractStartMatch[1]);
+      if (norm) {
+        issueDate = norm;
+        extractedFields.push(`Data Inizio Assunzione: ${norm}`);
+      }
+    }
+  }
+
+  // For Visita Medica:
+  if (category === 'visita_medica' && !expiryDate) {
+    const medMatch = text.match(
+      /(?:prossima\s*visita|scadenza(?:\s*idoneit[àa])?|valido\s*fino\s*al|validit[àa]\s*fino\s*al|rinnovo\s*entro\s*il|entro\s*il)[\s/:,\-A-Za-z.()]{0,40}?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+    );
+    if (medMatch && medMatch[1]) {
+      const norm = normalizeDate(medMatch[1]);
+      if (norm) {
+        expiryDate = norm;
+        extractedFields.push(`Data Prossima Visita Medica: ${norm}`);
+        confidence += 35;
+      }
+    }
+  }
+
+  // For Corso Sicurezza:
+  if (category === 'corso_sicurezza' && !expiryDate) {
+    const corsoMatch = text.match(
+      /(?:scadenza\s*aggiornamento|aggiornamento\s*entro|valido\s*fino\s*al|validit[àa]\s*fino\s*al|scadenza|scade\s*il)[\s/:,\-A-Za-z.()]{0,40}?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+    );
+    if (corsoMatch && corsoMatch[1]) {
+      const norm = normalizeDate(corsoMatch[1]);
+      if (norm) {
+        expiryDate = norm;
+        extractedFields.push(`Data Scadenza Corso: ${norm}`);
+        confidence += 35;
+      }
+    }
+  }
+
+  // 2. Extract Range "dal ... al ..." (Common in Italian permits, DURC and insurance)
+  if (!expiryDate && !hasNoExpiry) {
     const rangeMatch = text.match(
-      /\b(?:valido\s+)?(?:dal|da|from)\s+([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2})|\d{4}[-/.][0-1]?\d[-/.][0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))\s+\b(?:al|a|fino al|to|until)\s+([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2})|\d{4}[-/.][0-1]?\d[-/.][0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+      /\b(?:valido\s+)?(?:dal|da|from)\s+([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))\s+\b(?:al|a|fino al|to|until)\s+([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
     );
 
     if (rangeMatch) {
@@ -467,10 +734,10 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
     }
   }
 
-  // 3. Extract Expiry Date with flexible context (allows English translations and multiline labels)
-  if (!expiryDate) {
+  // 3. Extract Expiry Date with flexible context (including Tessera Sanitaria 8, DURC, Visita Medica, CIE 4b)
+  if (!expiryDate && !hasNoExpiry) {
     const expiryContextMatch = text.match(
-      /(?:data\s*(?:di)?\s*scadenza|scadenza\s*(?:\/|\s*e\s*|\s*-\s*)?\s*expiry(?:\s*date)?|scadenza|scad\.|scade\s+il|scade|valido\s+fino\s+al|valida\s+fino\s+al|fino\s+al|entro\s+il|val\.\s*al|fine\s+validit[àa]|\b4b[.\s:,]+|valid\s+until|expiry\s*(?:date)?|expires\s*(?:on)?|تاريخ\s*(?:انتهاء\s*الصلاحية|الانتهاء|النفاذ)|صالح\s*(?:حتى|إلى))[\s/:,\-A-Za-z.()]{0,60}?([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2})|\d{4}[-/.][0-1]?\d[-/.][0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+      /(?:data\s*(?:di)?\s*scadenza|scadenza\s*(?:\/|\s*e\s*|\s*-\s*)?\s*expiry(?:\s*date)?|scadenza|scad\.|scade\s+il|scade|valido\s+fino\s+al|valida\s+fino\s+al|validit[àa]\s+fino\s+al|fino\s+al|entro\s+il|val\.\s*al|fine\s+validit[àa]|\b4b[.\s:,]+|\b8[.\s:,]+(?:scadenza|valido\s+fino\s+al)?|\b8\s+scadenza|\b6\.\s*scadenza|prossima\s+visita|scadenza\s+durc|valid\s+until|expiry\s*(?:date)?|expires\s*(?:on)?|تاريخ\s*(?:انتهاء\s*الصلاحية|الانتهاء|النفاذ)|صالح\s*(?:حتى|إلى))[\s/:,\-A-Za-z.()]{0,60}?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
     );
 
     if (expiryContextMatch && expiryContextMatch[1]) {
@@ -487,9 +754,9 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
   }
 
   // 3b. Extract Car Insurance Expiry Formula ("alle ore 24 del DD/MM/YYYY")
-  if (!expiryDate) {
+  if (!expiryDate && !hasNoExpiry) {
     const insuranceMatch = text.match(
-      /\balle\s+ore\s*(?:24|12|00)(?::00)?\s+(?:del\s+)?([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2}))/i
+      /\balle\s+ore\s*(?:24|12|00)(?::00)?\s+(?:del\s+)?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2}))/i
     );
     if (insuranceMatch && insuranceMatch[1]) {
       const norm = normalizeDate(insuranceMatch[1]);
@@ -504,7 +771,7 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
   // 4. Extract Issue Date with strict boundaries
   if (!issueDate) {
     const issueContextMatch = text.match(
-      /(?<![a-zA-Z])(?:data di rilascio|data rilascio|data emissione|data di emissione|rilasciato il|rilasciata il|rilascio|emesso il|emessa il|in data|valido dal|del|4a[.\s:,]+|date of issue|issued on|issue date|تاريخ الإصدار|تاريخ الاصدار|تاريخ التحرير)[\s/:,\-A-Za-z.()]{0,40}?([0-3]?\d[-/. ,][0-3]?\d[-/. ,](?:19\d{2}|20\d{2}|\d{2})|\d{4}[-/.][0-1]?\d[-/.][0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+      /(?<![a-zA-Z])(?:data di rilascio|data rilascio|data emissione|data di emissione|rilasciato il|rilasciata il|rilascio|emesso il|emessa il|in data|valido dal|del|4a[.\s:,]+|date of issue|issued on|issue date|تاريخ الإصدار|تاريخ الاصدار|تاريخ التحرير)[\s/:,\-A-Za-z.()]{0,40}?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
     );
 
     if (issueContextMatch && issueContextMatch[1]) {
@@ -520,24 +787,30 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
     }
   }
 
-  // 5. Automatic Fallback: Automatically detect and confirm the expiry date without requiring manual review
-  if (!expiryDate) {
+  // 5. Smart Fallback with explicit verification flag (needsReview)
+  if (!expiryDate && !hasNoExpiry) {
     const candidateDates = findAllCandidateDates(text);
     if (candidateDates.length > 0) {
       const futureDates = candidateDates.filter((d) => d.isFuture);
       if (futureDates.length > 0) {
         futureDates.sort((a, b) => a.normalized.localeCompare(b.normalized));
         expiryDate = futureDates[futureDates.length - 1].normalized;
-        isExpiryEstimated = false; // Confirmed automatically
-        extractedFields.push(`Data Scadenza rilevata automaticamente: ${expiryDate}`);
-        confidence += 25;
+        isExpiryEstimated = true;
+        needsReview = true;
+        extractedFields.push(`⚠️ Data Scadenza presunta: ${expiryDate} (richiede verifica)`);
+        confidence += 20;
       } else {
         candidateDates.sort((a, b) => a.normalized.localeCompare(b.normalized));
         expiryDate = candidateDates[candidateDates.length - 1].normalized;
-        isExpiryEstimated = false; // Confirmed automatically
-        extractedFields.push(`Data Scadenza rilevata automaticamente: ${expiryDate}`);
-        confidence += 20;
+        isExpiryEstimated = true;
+        needsReview = true;
+        extractedFields.push(`⚠️ Data Scadenza presunta: ${expiryDate} (richiede verifica)`);
+        confidence += 15;
       }
+    } else {
+      needsReview = true;
+      isExpiryEstimated = true;
+      extractedFields.push('⚠️ Nessuna data di scadenza rilevata - Richiede verifica manuale');
     }
   }
 
@@ -591,11 +864,18 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
   }
 
   if (!issuingAuthority) {
-    const questuraMatch = text.match(/\bquestura(?:\s+di|\s+d'|\s+)?\s+([A-Za-zÀ-ÿ'-]{3,20})/i);
+    const questuraMatch = text.match(/\bquestura(?:\s+(?:di|d'|di\s+rilascio|competente))?\s*[:.-]?\s*([A-Za-zÀ-ÿ'-]{3,20})/i);
     if (questuraMatch) {
-      issuingAuthority = `Questura di ${questuraMatch[1].trim()}`;
-      extractedFields.push(`Ente: ${issuingAuthority}`);
-      confidence += 10;
+      const city = questuraMatch[1].trim();
+      if (!/^(rilascio|competente|provinciale|stranieri)$/i.test(city)) {
+        issuingAuthority = `Questura di ${city}`;
+        extractedFields.push(`Ente: ${issuingAuthority}`);
+        confidence += 10;
+      } else {
+        issuingAuthority = 'Questura';
+        extractedFields.push(`Ente: Questura`);
+        confidence += 10;
+      }
     } else {
       const comuneMatch = text.match(/\bcomune\s+(?:di\s+)?([A-Za-zÀ-ÿ\s'-]{3,25})/i);
       if (comuneMatch) {
@@ -684,19 +964,13 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
   }
 
   // 8. Extract Holder Name
-  const cognomeMatch = text.match(/(?:1\.\s*cognome|\bcognome\b)[\s:]+([A-Za-zÀ-ÿ\s'-]{2,30})/i);
-  const nomeMatch = text.match(/(?:2\.\s*nome|\bnome\b)[\s:]+([A-Za-zÀ-ÿ\s'-]{2,30})/i);
-
-  if (cognomeMatch && nomeMatch) {
-    const c = cognomeMatch[1].trim().split('\n')[0];
-    const n = nomeMatch[1].trim().split('\n')[0];
-    holderName = `${c} ${n}`;
-    extractedFields.push(`Intestatario: ${holderName}`);
-    confidence += 15;
-  } else if (cognomeMatch) {
-    holderName = cognomeMatch[1].trim().split('\n')[0];
-    extractedFields.push(`Cognome: ${holderName}`);
-    confidence += 5;
+  if (!holderName) {
+    const cleanExtractedName = extractCleanHolderName(text, category);
+    if (cleanExtractedName) {
+      holderName = cleanExtractedName;
+      extractedFields.push(`Intestatario: ${holderName}`);
+      confidence += 15;
+    }
   }
 
   // 9. Filename hints and Smart Title Synthesis
@@ -709,6 +983,13 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
     passaporto: 'Passaporto',
     contratto_affitto: 'Contratto di Locazione',
     contratto_lavoro: 'Contratto di Lavoro',
+    durc: 'DURC - Regolarità Contributiva',
+    visita_medica: 'Visita Medica Idoneità',
+    corso_sicurezza: 'Corso Sicurezza sul Lavoro',
+    busta_paga: 'Busta Paga',
+    certificazione_unica: 'Certificazione Unica (CU)',
+    visura_camerale: 'Visura Camerale',
+    certificato: 'Certificato Ufficiale',
     altro: fileName ? fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : 'Documento Ufficiale'
   };
 
@@ -725,6 +1006,12 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
         category = 'tessera_sanitaria';
       } else if (cleanFn.includes('assicurazione') || cleanFn.includes('rca')) {
         category = 'assicurazione';
+      } else if (cleanFn.includes('durc')) {
+        category = 'durc';
+      } else if (cleanFn.includes('visita') || cleanFn.includes('idoneita') || cleanFn.includes('medica')) {
+        category = 'visita_medica';
+      } else if (cleanFn.includes('corso') || cleanFn.includes('sicurezza') || cleanFn.includes('attestato')) {
+        category = 'corso_sicurezza';
       }
     }
 
@@ -751,5 +1038,7 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
     extractedFields,
     rawText: text,
     isExpiryEstimated,
+    hasNoExpiry,
+    needsReview,
   };
 }

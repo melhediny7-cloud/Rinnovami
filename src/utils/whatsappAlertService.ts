@@ -136,14 +136,15 @@ export function formatAllDocsWhatsAppMessage(
   const expiringSoon: DocumentItem[] = [];
 
   for (const doc of documents) {
-    const days = getDaysRemaining(doc.expiryDate);
-    const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore);
+    if (doc.hasNoExpiry || !doc.expiryDate) continue;
+    const threshold = doc.reminderDaysBefore ?? 30;
+    const status = computeDocumentStatus(doc.expiryDate, threshold, doc.hasNoExpiry, doc.needsReview);
 
     if (status === 'expired') {
       expired.push(doc);
-    } else if (status === 'critical' || days <= 15) {
+    } else if (status === 'critical') {
       critical.push(doc);
-    } else if (days <= maxDays) {
+    } else if (status === 'expiring_soon') {
       expiringSoon.push(doc);
     }
   }
@@ -180,7 +181,7 @@ export function formatAllDocsWhatsAppMessage(
   }
 
   if (expiringSoon.length > 0) {
-    text += lang === 'ar' ? `🟡 *وثائق تنتهي خلال 30 يوماً (${expiringSoon.length}):*\n` : `🟡 *In Scadenza nei prossimi 30 gg (${expiringSoon.length}):*\n`;
+    text += lang === 'ar' ? `🟡 *وثائق تقترب من موعد التجديد (${expiringSoon.length}):*\n` : `🟡 *In Scadenza da Rinnovare (${expiringSoon.length}):*\n`;
     expiringSoon.forEach((doc, idx) => {
       const days = getDaysRemaining(doc.expiryDate);
       text += `${idx + 1}. *${doc.title}*\n   • تاريخ الانتهاء: *${doc.expiryDate}* (متبقي ${days} يوم)\n\n`;

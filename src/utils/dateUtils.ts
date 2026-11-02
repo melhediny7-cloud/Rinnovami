@@ -1,4 +1,4 @@
-import { DocumentItem, DocumentStatus } from '../types';
+import { DocumentCategory, DocumentItem, DocumentStatus } from '../types';
 
 export function getTodayOffset(daysOffset: number): string {
   const d = new Date();
@@ -27,26 +27,64 @@ export function getDaysRemaining(expiryDateStr?: string): number {
 }
 
 /**
- * Compute document status based on smart color palette:
- * - permanent: Permanent document without expiry (hasNoExpiry)
+ * Compute document status dynamically based on custom reminder threshold and document flags:
+ * - review: Document requires manual verification (needsReview)
+ * - permanent: Permanent document without expiry (hasNoExpiry or empty expiry date)
  * - expired: Expired (< 0 days)
- * - critical: Expiring within 30 days (0 to 30 days)
- * - expiring_soon: Expiring within 90 days (31 to 90 days)
- * - valid: Valid (> 90 days)
+ * - critical: Expiring within urgent critical threshold (<= 15-30 days depending on lead time)
+ * - expiring_soon: Expiring within custom reminder lead days (<= reminderDays)
+ * - valid: Valid (> reminderDays)
  */
 export function computeDocumentStatus(
   expiryDateStr?: string,
-  _reminderDays: number = 60,
-  hasNoExpiry: boolean = false
+  reminderDays: number = 90,
+  hasNoExpiry: boolean = false,
+  needsReview: boolean = false
 ): DocumentStatus {
+  if (needsReview) {
+    return 'review';
+  }
   if (hasNoExpiry || !expiryDateStr) {
     return 'permanent';
   }
   const days = getDaysRemaining(expiryDateStr);
   if (days < 0) return 'expired';
-  if (days <= 30) return 'critical';
-  if (days <= 90) return 'expiring_soon';
+
+  // Dynamic critical threshold:
+  // For long lead times (>= 60 days): critical is <= 30 days
+  // For medium lead times (16-59 days): critical is <= 15 days
+  // For short lead times (<= 15 days, e.g. DURC 10 days): critical is <= half period (max 5 days)
+  const criticalThreshold =
+    reminderDays >= 60 ? 30 : reminderDays > 15 ? 15 : Math.max(3, Math.floor(reminderDays / 2));
+
+  if (days <= criticalThreshold) return 'critical';
+  if (days <= reminderDays) return 'expiring_soon';
   return 'valid';
+}
+
+/**
+ * Intelligent default reminder days per Italian document category and title hints:
+ * - DURC: 10 days
+ * - Visita Medica: 20 days
+ * - Corsi Sicurezza / Formazione: 30 days (1 month)
+ * - Contratto di Lavoro: 60 days (2 months)
+ * - Permesso di Soggiorno: 60 days
+ * - Carta d'Identità CIE: 90 days
+ * - Assicurazione: 30 days
+ * - Patente / Tessera Sanitaria: 60 days
+ */
+export function getDefaultReminderDays(cat?: DocumentCategory, title?: string): number {
+  const t = (title || '').toLowerCase();
+  if (cat === 'durc' || t.includes('durc')) return 10;
+  if (cat === 'visita_medica' || t.includes('visita') || t.includes('idoneita') || t.includes('medica')) return 20;
+  if (cat === 'corso_sicurezza' || t.includes('corso') || t.includes('sicurezza') || t.includes('formazione') || t.includes('attestato')) return 30;
+  if (cat === 'contratto_lavoro' || t.includes('contratto')) return 60;
+  if (cat === 'permesso_soggiorno') return 60;
+  if (cat === 'carta_identita') return 90;
+  if (cat === 'assicurazione') return 30;
+  if (cat === 'patente') return 60;
+  if (cat === 'tessera_sanitaria') return 60;
+  return 30;
 }
 
 export function formatDateLocale(dateStr?: string, lang: 'ar' | 'it' = 'it'): string {

@@ -1,7 +1,7 @@
 import { DocumentCategory, DocumentItem } from '../types';
 import { runItalianOCR, OCRProgress } from './ocrService';
 import { compressImageFile } from './imageCompressor';
-import { getTodayOffset } from './dateUtils';
+import { getDefaultReminderDays } from './dateUtils';
 
 export interface AutoScanProgressItem {
   id: string;
@@ -12,26 +12,6 @@ export interface AutoScanProgressItem {
   progress: number;
   result?: DocumentItem;
   errorMessage?: string;
-}
-
-/**
- * Determine default reminder threshold based on category
- */
-function getDefaultReminderDays(cat?: DocumentCategory): number {
-  switch (cat) {
-    case 'permesso_soggiorno':
-      return 60; // Italian law recommends 60 days before expiry
-    case 'carta_identita':
-      return 90; // CIE can be renewed up to 180 days before expiry
-    case 'patente':
-      return 60;
-    case 'assicurazione':
-      return 30;
-    case 'tessera_sanitaria':
-      return 60;
-    default:
-      return 60;
-  }
 }
 
 /**
@@ -57,14 +37,16 @@ export async function autoProcessFile(
   if (onProgress) onProgress(95, 'استخراج الحقول وتأكيد الصلاحية...');
 
   const category = parsed.category || 'altro';
-  const reminderDaysBefore = getDefaultReminderDays(category);
+  const reminderDaysBefore = getDefaultReminderDays(category, parsed.title || file.name);
 
-  // Expiry date is adopted automatically by the system without requiring manual review
-  let expiryDate = parsed.expiryDate;
-  if (!expiryDate) {
-    expiryDate = getTodayOffset(365); // Fallback: 1 year from now
+  // Accurate status evaluation: respect permanent documents and flag estimated/missing dates with needsReview
+  const hasNoExpiry = !!parsed.hasNoExpiry;
+  let expiryDate = parsed.expiryDate || '';
+  let needsReview = !!parsed.needsReview;
+
+  if (!hasNoExpiry && !expiryDate) {
+    needsReview = true;
   }
-  const needsReview = false;
 
   const newDoc: DocumentItem = {
     id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -76,12 +58,13 @@ export async function autoProcessFile(
     expiryDate,
     issuingAuthority: parsed.issuingAuthority || undefined,
     reminderDaysBefore,
-    notes: parsed.rawText ? `تم الاستخراج التلقائي بنجاح. دقة الفحص: ${parsed.confidenceScore}%` : undefined,
+    notes: parsed.rawText ? `تم الفحص الضوئي بنجاح. دقة الفحص: ${parsed.confidenceScore}%` : undefined,
     fileData: compression.dataUrl,
     fileName: file.name,
     fileType: file.type,
     fileSize: compression.size,
     isDemo: false,
+    hasNoExpiry,
     needsReview,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

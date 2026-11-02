@@ -274,8 +274,8 @@ node scripts/cron-email-notifier.js --backup=rinnovami-backup.json --to=${settin
                     </h4>
                     <p className="text-xs text-amber-800/90 dark:text-amber-300/90 mt-0.5">
                       {lang === 'ar'
-                        ? `لديك ${expired.length} منتهية، و ${critical.length} حرجة، و ${expiringSoon.length} في نطاق الـ 30 يوماً.`
-                        : `Hai ${expired.length} scaduti, ${critical.length} imminenti, e ${expiringSoon.length} nei prossimi 30 gg.`}
+                        ? `لديك ${expired.length} منتهية، و ${critical.length} حرجة، و ${expiringSoon.length} في نطاق مهلة التنبيه.`
+                        : `Hai ${expired.length} scaduti, ${critical.length} imminenti, e ${expiringSoon.length} in scadenza.`}
                     </p>
                   </div>
                 </div>

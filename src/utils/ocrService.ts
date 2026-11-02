@@ -20,81 +20,101 @@ export interface OCRProgress {
 }
 
 /**
- * Extract text directly from a PDF file using PDF.js text layer.
- * If text layer is empty (scanned PDF), render first page to canvas for OCR.
+ * Extract text directly from a PDF file using PDF.js text layer across all pages.
+ * If text layer is missing or sparse (scanned PDF), renders pages to canvas and runs Tesseract OCR.
+ * Scans up to 8 pages to read full multi-page contracts, courses, and certificates.
  */
 export async function extractTextFromPDF(
   file: File,
   onProgress?: (p: OCRProgress) => void
 ): Promise<string> {
   if (onProgress) {
-    onProgress({ status: 'lettura_pdf', progress: 0.15 });
+    onProgress({ status: 'lettura_pdf', progress: 0.1 });
   }
 
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const totalPages = pdf.numPages;
 
   let extractedText = '';
-  const maxPages = Math.min(pdf.numPages, 3); // check first 3 pages
+  const maxTextPages = Math.min(totalPages, 15); // inspect up to 15 pages for digital text
 
-  for (let i = 1; i <= maxPages; i++) {
+  for (let i = 1; i <= maxTextPages; i++) {
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
     const pageStr = textContent.items
       .map((item: any) => item.str || '')
-      .join(' ');
-    extractedText += ' ' + pageStr;
+      .join(' ')
+      .trim();
+    if (pageStr) {
+      extractedText += `\n[--- Pagina ${i} ---]\n${pageStr}`;
+    }
 
     if (onProgress) {
       onProgress({
-        status: `pagina_${i}`,
-        progress: 0.2 + (i / maxPages) * 0.4,
+        status: `Lettura pagina ${i}/${maxTextPages}...`,
+        progress: 0.1 + (i / maxTextPages) * 0.3,
       });
     }
   }
 
-  // If we found meaningful text in the text layer, return it directly!
-  if (extractedText.trim().length > 30) {
+  // If we found sufficient digital text (> 120 chars), return the full multi-page text!
+  if (extractedText.trim().length > 120) {
     if (onProgress) {
       onProgress({ status: 'completato_testo', progress: 1.0 });
     }
     return extractedText;
   }
 
-  // Otherwise, it's a scanned PDF without text layer: render page 1 to canvas for OCR
+  // Otherwise, it's a scanned PDF without text layer: run OCR across all pages (up to 8 pages)
+  const maxOcrPages = Math.min(totalPages, 8);
+  let ocrFullText = '';
+
+  for (let i = 1; i <= maxOcrPages; i++) {
+    if (onProgress) {
+      onProgress({
+        status: `Scansione OCR pagina ${i}/${maxOcrPages}...`,
+        progress: 0.2 + ((i - 1) / maxOcrPages) * 0.75,
+      });
+    }
+
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 2.0 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) continue;
+
+    await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+
+    // Contrast enhancement
+    const enhancedCanvas = preprocessCanvasForOCR(canvas);
+
+    const ocrResult = await Tesseract.recognize(enhancedCanvas, 'ita+eng', {
+      logger: (m) => {
+        if (m.status === 'recognizing text' && onProgress) {
+          const pageProgress = (m.progress || 0) / maxOcrPages;
+          const baseProgress = 0.2 + ((i - 1) / maxOcrPages) * 0.75;
+          onProgress({
+            status: `Scansione OCR pagina ${i}/${maxOcrPages}...`,
+            progress: Math.min(baseProgress + pageProgress * 0.75, 0.96),
+          });
+        }
+      },
+    });
+
+    if (ocrResult.data.text && ocrResult.data.text.trim()) {
+      ocrFullText += `\n[--- Pagina ${i} ---]\n${ocrResult.data.text.trim()}`;
+    }
+  }
+
   if (onProgress) {
-    onProgress({ status: 'scansione_ocr_pdf', progress: 0.5 });
+    onProgress({ status: 'completato_ocr', progress: 1.0 });
   }
 
-  const page = await pdf.getPage(1);
-  const viewport = page.getViewport({ scale: 2.0 });
-  const canvas = document.createElement('canvas');
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  const ctx = canvas.getContext('2d');
-
-  if (!ctx) {
-    return extractedText;
-  }
-
-  await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
-
-  // Preprocess canvas with contrast enhancement to eliminate background scan shadows/patterns
-  const enhancedCanvas = preprocessCanvasForOCR(canvas);
-
-  // Run Tesseract OCR on rendered canvas
-  const ocrResult = await Tesseract.recognize(enhancedCanvas, 'ita+eng', {
-    logger: (m) => {
-      if (m.status === 'recognizing text' && onProgress) {
-        onProgress({
-          status: 'ocr_scansione',
-          progress: Math.min(0.6 + (m.progress || 0) * 0.35, 0.95),
-        });
-      }
-    },
-  });
-
-  return ocrResult.data.text || extractedText;
+  return ocrFullText || extractedText;
 }
 
 /**

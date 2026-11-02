@@ -47,29 +47,29 @@ export function saveEmailSettings(settings: EmailAlertSettings): void {
  */
 export function getExpiringDocumentsForAlert(
   documents: DocumentItem[],
-  leadDays: number[] = [90, 60, 30, 15, 7, 3, 1]
+  _leadDays: number[] = [90, 60, 30, 15, 7, 3, 1]
 ): {
   expired: DocumentItem[];
   critical: DocumentItem[];
   expiringSoon: DocumentItem[];
   allUrgent: DocumentItem[];
 } {
-  // In Italy, documents like Permesso di Soggiorno or CIE require up to 90 days lead time
-  const maxDays = Math.max(...leadDays, 90);
   const expired: DocumentItem[] = [];
   const critical: DocumentItem[] = [];
   const expiringSoon: DocumentItem[] = [];
 
   for (const doc of documents) {
-    const days = getDaysRemaining(doc.expiryDate);
-    const status = computeDocumentStatus(doc.expiryDate, doc.reminderDaysBefore);
-    const reminderThreshold = doc.reminderDaysBefore ? Math.max(doc.reminderDaysBefore, maxDays) : maxDays;
+    if (doc.hasNoExpiry) continue;
+    if (!doc.expiryDate) continue;
+
+    const threshold = doc.reminderDaysBefore ?? 30;
+    const status = computeDocumentStatus(doc.expiryDate, threshold, doc.hasNoExpiry, doc.needsReview);
 
     if (status === 'expired') {
       expired.push(doc);
-    } else if (status === 'critical' || days <= 30) {
+    } else if (status === 'critical') {
       critical.push(doc);
-    } else if (days <= reminderThreshold) {
+    } else if (status === 'expiring_soon') {
       expiringSoon.push(doc);
     }
   }
@@ -153,7 +153,7 @@ export function formatEmailReport(
   }
 
   if (expiringSoon.length > 0) {
-    plain += lang === 'ar' ? `🟡 وثائق تقترب من الانتهاء (${expiringSoon.length}):\n` : `🟡 In Scadenza nei prossimi 30 giorni (${expiringSoon.length}):\n`;
+    plain += lang === 'ar' ? `🟡 وثائق تقترب من موعد التجديد (${expiringSoon.length}):\n` : `🟡 Documenti in Scadenza da Rinnovare (${expiringSoon.length}):\n`;
     expiringSoon.forEach((d) => {
       const days = getDaysRemaining(d.expiryDate);
       plain += `- ${d.title} | تاريخ الانتهاء: ${d.expiryDate} (متبقي ${days} يوم)\n`;
