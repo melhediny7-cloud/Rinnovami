@@ -381,8 +381,20 @@ export function cleanNameCandidate(raw?: string): string | undefined {
  * Intelligent extraction of holder name tailored to document category
  */
 export function extractCleanHolderName(text: string, category: DocumentCategory): string | undefined {
-  // 1. In employment contracts: check worker / employee name first
+  // 1. In employment contracts: check worker / employee name first (Quadro C / Lavoratore)
   if (category === 'contratto_lavoro') {
+    const workerSection = text.match(/(?:quadro\s*[c3]|dati\s+(?:del\s+)?lavoratore|il\s+lavoratore|lavoratore)[\s\S]{1,500}/i);
+    if (workerSection) {
+      const wText = workerSection[0];
+      const wCog = wText.match(/cognome\s*[:.-]?\s*([A-Za-zÀ-ÿ\s'-]{2,35})/i);
+      const wNom = wText.match(/nome\s*[:.-]?\s*([A-Za-zÀ-ÿ\s'-]{2,35})/i);
+      const c = cleanNameCandidate(wCog ? wCog[1] : undefined);
+      const n = cleanNameCandidate(wNom ? wNom[1] : undefined);
+      if (c && n) return `${c} ${n}`;
+      if (c) return c;
+      if (n) return n;
+    }
+
     const workerMatch = text.match(
       /(?:lavoratore(?:\s+subordinato)?|dipendente|nominativo\s+lavoratore|lavoratore\s*:|cognome\s+e\s+nome(?:\s+del\s+lavoratore)?)\s*[:.-]?\s*([A-Za-zÀ-ÿ\s'-]{3,35})/i
     );
