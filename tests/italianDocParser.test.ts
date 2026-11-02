@@ -291,5 +291,23 @@ describe('italianDocParser - Document Analysis & OCR Parser', () => {
       expect(result.expiryDate).toBeUndefined();
       expect(result.issueDate).toBeDefined();
     });
+
+    it('rejects past or today registration dates (e.g. 01/11/2026) from being used as contract expiry', () => {
+      const unilavRecent = `
+        COMUNICAZIONE OBBLIGATORIA UNIFICATO LAV
+        Data invio: 01/11/2026
+        Codice Fiscale Lavoratore: LSHHYB82B08Z336F
+        QUADRO D - RAPPORTO DI LAVORO
+        Data inizio: 01/11/2026
+        Data fine:
+        Data trasmissione: 01/11/2026
+      `;
+      const result = analyzeItalianDocumentText(unilavRecent, 'ELSHAHNA.pdf');
+      expect(result.category).toBe('contratto_lavoro');
+      expect(result.expiryDate).toBeUndefined(); // Must NOT be 2026-11-01!
+      expect(result.hasNoExpiry).toBe(true); // Permanent because no future termination date
+      expect(result.documentNumber).toBe('LSHHYB82B08Z336F');
+      expect(result.holderName).toBe('ELSHAHNA');
+    });
   });
 });

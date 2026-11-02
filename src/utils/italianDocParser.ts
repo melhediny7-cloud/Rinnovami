@@ -400,6 +400,7 @@ export function cleanNameCandidate(raw?: string): string | undefined {
   str = str.replace(/[^A-Za-zÀ-ÿ\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
   if (str.length < 2 || str.length > 35) return undefined;
   if (/^(nome|cognome|datore|lavoratore|dipendente|firma|nato|sesso|data|comune|provincia)$/i.test(str)) return undefined;
+  if (/^[A-Z]{6}$/.test(str)) return undefined; // Filter out Codice Fiscale 6-letter surname/name chunks (e.g. LSHHYB)
   return str;
 }
 
@@ -747,13 +748,13 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
 
     // 4. Search for Contract End Date (if not permanent)
     if (!hasNoExpiry) {
-      // Priority 4a: Explicit contract termination markers
+      // Priority 4a: Explicit contract termination markers (MUST be on the same line to avoid grabbing next fields like data invio)
       const contractEndMatch = text.match(
-        /(?:data\s*(?:di)?\s*fine(?:\s*rapporto)?|data\s*(?:di)?\s*termine(?:\s*rapporto)?|data\s*cessazione(?:\s*rapporto)?|termine\s*(?:del)?\s*rapporto|termine\s*(?:del)?\s*contratto|fine\s+rapporto|scadenza\s*(?:del)?\s*contratto|fino\s+al|fino\s+alla\s+data\s+del|con\s+scadenza\s+il|al\s+giorno)[\s/:,\-A-Za-z.()]{0,40}?([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
+        /(?:data\s*(?:di)?\s*fine(?:\s*rapporto)?|data\s*(?:di)?\s*termine(?:\s*rapporto)?|data\s*cessazione(?:\s*rapporto)?|termine\s*(?:del)?\s*rapporto|termine\s*(?:del)?\s*contratto|fine\s+rapporto|scadenza\s*(?:del)?\s*contratto|fino\s+al|fino\s+alla\s+data\s+del|con\s+scadenza\s+il|al\s+giorno)[^\S\r\n]*[:.-]?[^\S\r\n]*([0-3]?\d\s*[-/. ,]\s*[0-3]?\d\s*[-/. ,]\s*(?:19\d{2}|20\d{2}|\d{2})|\d{4}\s*[-/.]\s*[0-1]?\d\s*[-/.]\s*[0-3]?\d|[0-3]?\d\s+[a-z]{3,9}\s+(?:19\d{2}|20\d{2}|\d{2}))/i
       );
       if (contractEndMatch && contractEndMatch[1]) {
         const norm = normalizeDate(contractEndMatch[1]);
-        if (norm && norm !== registrationDate && norm !== startDate) {
+        if (norm) {
           expiryDate = norm;
           title = 'Contratto di Lavoro a Tempo Determinato';
           extractedFields.push(`Data Fine Contratto: ${norm}`);
@@ -794,6 +795,28 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
         }
       }
 
+      // Strict validation: An employment contract expiration date CAN NEVER be in the past or today,
+      // and can NEVER equal or precede the start date or registration date!
+      if (expiryDate) {
+        const [ey, em, ed] = expiryDate.split('-').map(Number);
+        const expiryObj = new Date(ey, em - 1, ed);
+        const todayDate = new Date();
+        todayDate.setHours(0, 0, 0, 0);
+
+        if (
+          expiryObj <= todayDate ||
+          (startDate && expiryDate <= startDate) ||
+          (registrationDate && expiryDate <= registrationDate)
+        ) {
+          // This is a past/registration date misread as expiry date!
+          if (!issueDate) {
+            issueDate = expiryDate;
+          }
+          extractedFields.push(`Data esclusa (passata o data registrazione/inizio): ${expiryDate}`);
+          expiryDate = undefined;
+        }
+      }
+
       // 5. Final contract evaluation:
       // If no valid termination date was found:
       // If not explicitly temporary, Italian contracts are permanent (Tempo Indeterminato) by default.
@@ -802,7 +825,7 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
           hasNoExpiry = true;
           expiryDate = undefined;
           title = 'Contratto di Lavoro (Indeterminato)';
-          extractedFields.push('Validità: Contratto a Tempo Indeterminato (Nessun termine apposto)');
+          extractedFields.push('Validità: Contratto a Tempo Indeterminato (Permanente)');
         } else {
           // Explicitly temporary but end date requires user input
           expiryDate = undefined;
@@ -1122,6 +1145,13 @@ export function analyzeItalianDocumentText(text: string, fileName?: string): Par
       holderName = cleanExtractedName;
       extractedFields.push(`Intestatario: ${holderName}`);
       confidence += 15;
+    } else if (fileName) {
+      const baseName = fileName.replace(/\.[^/.]+$/, '').replace(/[_\-]/g, ' ').trim();
+      if (baseName.length >= 3 && !/contratto|unilav|documento|scan|img|pdf/i.test(baseName)) {
+        holderName = baseName.toUpperCase();
+        extractedFields.push(`Intestatario (dal nome file): ${holderName}`);
+        confidence += 10;
+      }
     }
   }
 
